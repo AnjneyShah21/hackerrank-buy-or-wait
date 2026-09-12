@@ -18,6 +18,7 @@ from code.forecast import CashFlowForecaster
 from code.models import (
     CandidatePlan,
     ExchangeRate,
+    ExtractedFact,
     FinancialEvent,
     FinancialRequest,
     RequestPaymentOption,
@@ -302,6 +303,34 @@ class TestGeneralizedFixes(unittest.TestCase):
             profile, events, request
         )
         self.assertEqual(earliest, "2026-01-10")
+
+    def test_salary_date_shift_preserves_monthly_calendar_day(self):
+        """A confirmed salary date must not drift by one day across 31-day months."""
+        from code.evidence import EvidenceManager
+
+        evidence = EvidenceManager()
+        evidence.add_fact(ExtractedFact(
+            fact_id="shift_1", source_type="message", source_id="msg_1",
+            user_id="u_shift", fact_kind="date_shift",
+            extracted_date="2024-09-23",
+        ))
+        forecaster = CashFlowForecaster(self.converter, evidence)
+        events = [FinancialEvent(
+            event_id="salary_1", user_id="u_shift", event_type="income",
+            description="Employer payroll", category="salary", direction="credit",
+            amount=1000.0, currency="USD", event_date="2024-08-23",
+            settlement_date="2024-08-23", status="settled",
+        )]
+
+        projected = forecaster._project_recurring_events(
+            events,
+            start_dt=datetime(2024, 9, 5).date(),
+            end_dt=datetime(2024, 11, 1).date(),
+        )
+        dates = {event.event_date for event in projected}
+        self.assertIn("2024-09-23", dates)
+        self.assertIn("2024-10-23", dates)
+        self.assertNotIn("2024-10-24", dates)
 
     def test_image_extraction_ground_truth(self):
         """Test that ImageExtractor returns exact verified image values for image_01 (4,365,000 IDR)."""

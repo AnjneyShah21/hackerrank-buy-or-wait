@@ -290,7 +290,12 @@ class CashFlowForecaster:
                     if date_shifts:
                         shifted_dt = _parse_date(date_shifts[0].extracted_date)
                         if shifted_dt and shifted_dt > start_dt:
-                            base_dt = shifted_dt - timedelta(days=30)
+                            # Preserve the confirmed calendar day when deriving the
+                            # preceding monthly anchor.  A fixed 30-day subtraction
+                            # drifts for 31-day months (for example, a confirmed
+                            # 23rd becomes a 24th), which then shifts every
+                            # projected payday and payment decision.
+                            base_dt = _add_months(shifted_dt, -1)
 
                 curr_m = 1
                 while True:
