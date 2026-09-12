@@ -175,18 +175,19 @@ class CashFlowForecaster:
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
             avg_interval = sum(intervals) / len(intervals) if intervals else None
 
-            # 1. Weekly projection (interval 6 to 8 days)
-            if avg_interval and 6 <= avg_interval <= 8:
-                next_dt = last_dt + timedelta(days=7)
+            # 1. Weekly / Short-interval projection (interval 4 to 11 days)
+            if avg_interval and 4 <= avg_interval <= 11:
+                step_days = int(round(avg_interval))
+                next_dt = last_dt + timedelta(days=step_days)
                 while next_dt <= end_dt:
-                    if next_dt > start_dt:
+                    if next_dt >= start_dt:
                         date_str = next_dt.strftime("%Y-%m-%d")
                         if not (cat in future_category_dates and date_str in future_category_dates[cat]):
                             proj_ev = FinancialEvent(
                                 event_id=f"proj_{cat}_{dirn}_{date_str}",
                                 user_id=last_ev.user_id,
                                 event_type=last_ev.event_type,
-                                description=f"Projected weekly {cat}",
+                                description=f"Projected {cat}",
                                 category=cat,
                                 direction=dirn,
                                 amount=round(avg_amt, 2),
@@ -195,22 +196,24 @@ class CashFlowForecaster:
                                 settlement_date=date_str,
                                 status="settled",
                                 flexibility=last_ev.flexibility,
+                                parent_event_id=last_ev.event_id,
                             )
                             projected.append(proj_ev)
-                    next_dt += timedelta(days=7)
+                    next_dt += timedelta(days=step_days)
 
-            # 2. Biweekly projection (interval 12 to 16 days)
-            elif avg_interval and 12 <= avg_interval <= 16:
-                next_dt = last_dt + timedelta(days=14)
+            # 2. Biweekly / Multi-week projection (interval 12 to 24 days)
+            elif avg_interval and 12 <= avg_interval <= 24:
+                step_days = int(round(avg_interval))
+                next_dt = last_dt + timedelta(days=step_days)
                 while next_dt <= end_dt:
-                    if next_dt > start_dt:
+                    if next_dt >= start_dt:
                         date_str = next_dt.strftime("%Y-%m-%d")
                         if not (cat in future_category_dates and date_str in future_category_dates[cat]):
                             proj_ev = FinancialEvent(
                                 event_id=f"proj_{cat}_{dirn}_{date_str}",
                                 user_id=last_ev.user_id,
                                 event_type=last_ev.event_type,
-                                description=f"Projected biweekly {cat}",
+                                description=f"Projected {cat}",
                                 category=cat,
                                 direction=dirn,
                                 amount=round(avg_amt, 2),
@@ -219,9 +222,10 @@ class CashFlowForecaster:
                                 settlement_date=date_str,
                                 status="settled",
                                 flexibility=last_ev.flexibility,
+                                parent_event_id=last_ev.event_id,
                             )
                             projected.append(proj_ev)
-                    next_dt += timedelta(days=14)
+                    next_dt += timedelta(days=step_days)
 
             # 3. Monthly fixed projection (require len(ev_list) >= 2 for debits, >= 1 for salary)
             elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
@@ -231,7 +235,7 @@ class CashFlowForecaster:
                     date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
                     if date_shifts:
                         shifted_dt = _parse_date(date_shifts[0].extracted_date)
-                        if shifted_dt and shifted_dt > start_dt:
+                        if shifted_dt and shifted_dt >= start_dt:
                             base_dt = shifted_dt - timedelta(days=30)
 
                 curr_m = 1
@@ -239,7 +243,7 @@ class CashFlowForecaster:
                     next_dt = _add_months(base_dt, curr_m)
                     if next_dt > end_dt:
                         break
-                    if next_dt > start_dt:
+                    if next_dt >= start_dt:
                         date_str = next_dt.strftime("%Y-%m-%d")
                         # Skip if explicit future event already exists around date
                         if not (cat in future_category_dates and date_str in future_category_dates[cat]):
@@ -257,6 +261,7 @@ class CashFlowForecaster:
                                 status="scheduled",
                                 flexibility=last_ev.flexibility,
                                 minimum_allowed_amount=last_ev.minimum_allowed_amount,
+                                parent_event_id=last_ev.event_id,
                             )
                             projected.append(proj_ev)
                     curr_m += 1
@@ -350,12 +355,14 @@ class CashFlowForecaster:
             # Process Outflows (Debits)
             elif ev.direction == "debit":
                 # Stopped by spending change?
-                if ev.event_id in stopped_events:
+                if ev.event_id in stopped_events or (ev.parent_event_id and ev.parent_event_id in stopped_events):
                     continue
 
                 # Reduced by spending change?
                 if ev.event_id in reduced_events:
                     amt_home = min(amt_home, reduced_events[ev.event_id])
+                elif ev.parent_event_id and ev.parent_event_id in reduced_events:
+                    amt_home = min(amt_home, reduced_events[ev.parent_event_id])
 
                 if ev_dt <= end_dt:
                     d_str = ev_dt.strftime("%Y-%m-%d")

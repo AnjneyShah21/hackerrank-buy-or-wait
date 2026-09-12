@@ -42,6 +42,7 @@ class FinancialEvent:
     amount_needs_image: bool = False   # True when amount was blank in CSV
     is_recurring: bool = False
     cadence_days: Optional[int] = None
+    parent_event_id: Optional[str] = None
 
 
 @dataclass
