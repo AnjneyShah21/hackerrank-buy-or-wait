@@ -67,6 +67,20 @@ class ConversionAudit:
 
 
 @dataclass
+class DailyCashFlow:
+    """Audit entry for a single day in the 90-day cash-flow forecast."""
+    date_str: str
+    starting_balance: float
+    confirmed_inflows: float
+    required_outflows: float
+    proposed_payments: float
+    flexible_outflows: float
+    ending_balance: float
+    inflow_events: List[str] = field(default_factory=list)
+    outflow_events: List[str] = field(default_factory=list)
+
+
+@dataclass
 class RequestPaymentOption:
     """Represents a provider/seller payment offer from request_payment_options.csv."""
     payment_option_id: str
