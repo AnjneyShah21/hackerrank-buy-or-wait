@@ -25,8 +25,8 @@ MESSAGES_CSV = DATASET_DIR / "messages.csv"
 IMAGES_CSV = DATASET_DIR / "images.csv"
 OUTPUT_TEMPLATE_CSV = DATASET_DIR / "output.csv"
 
-# Target output CSV path (in repository root as required)
-OUTPUT_CSV = PROJECT_ROOT / "output.csv"
+# Target output CSV path (in dataset/ as required by problem statement)
+OUTPUT_CSV = DATASET_DIR / "output.csv"
 
 # Simulation Constants
 FORECAST_DAYS = 90

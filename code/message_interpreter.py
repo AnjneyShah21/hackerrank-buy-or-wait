@@ -85,38 +85,44 @@ class MessageInterpreter:
         # Salary increase to X: "salary has increased to EUR 1188"
         sal_inc = re.search(r"salary\s+has\s+increased\s+to\s+([A-Z]{3})\s+([\d,\.]+)", clean_text, re.IGNORECASE)
         if sal_inc:
-            curr, amt_str = sal_inc.group(1).upper(), sal_inc.group(2).replace(",", "")
-            facts.append(ExtractedFact(
-                fact_id=f"fact_{mid}_sal_inc",
-                source_type="message",
-                source_id=mid,
-                user_id=message.user_id,
-                related_event_id=message.related_event_id,
-                request_id=message.request_id,
-                fact_kind="salary_update",
-                extracted_amount=float(amt_str),
-                extracted_currency=curr,
-                confidence=1.0,
-                provenance=f"Salary increase to {curr} {amt_str} from {mid}",
-            ))
+            curr, amt_str = sal_inc.group(1).upper(), sal_inc.group(2).replace(",", "").rstrip(".")
+            try:
+                facts.append(ExtractedFact(
+                    fact_id=f"fact_{mid}_sal_inc",
+                    source_type="message",
+                    source_id=mid,
+                    user_id=message.user_id,
+                    related_event_id=message.related_event_id,
+                    request_id=message.request_id,
+                    fact_kind="salary_update",
+                    extracted_amount=float(amt_str),
+                    extracted_currency=curr,
+                    confidence=1.0,
+                    provenance=f"Salary increase to {curr} {amt_str} from {mid}",
+                ))
+            except ValueError:
+                pass
 
         # Temporary reduced pay: "temporary monthly pay is EUR 1750.32" / "reduced to USD 1731.60"
         temp_pay = re.search(r"(?:temporary\s+monthly\s+pay\s+is|reduced\s+to)\s+([A-Z]{3})\s+([\d,\.]+)", clean_text, re.IGNORECASE)
         if temp_pay and not sal_inc:
-            curr, amt_str = temp_pay.group(1).upper(), temp_pay.group(2).replace(",", "")
-            facts.append(ExtractedFact(
-                fact_id=f"fact_{mid}_temp_pay",
-                source_type="message",
-                source_id=mid,
-                user_id=message.user_id,
-                related_event_id=message.related_event_id,
-                request_id=message.request_id,
-                fact_kind="salary_update",
-                extracted_amount=float(amt_str),
-                extracted_currency=curr,
-                confidence=1.0,
-                provenance=f"Temporary/reduced salary {curr} {amt_str} from {mid}",
-            ))
+            curr, amt_str = temp_pay.group(1).upper(), temp_pay.group(2).replace(",", "").rstrip(".")
+            try:
+                facts.append(ExtractedFact(
+                    fact_id=f"fact_{mid}_temp_pay",
+                    source_type="message",
+                    source_id=mid,
+                    user_id=message.user_id,
+                    related_event_id=message.related_event_id,
+                    request_id=message.request_id,
+                    fact_kind="salary_update",
+                    extracted_amount=float(amt_str),
+                    extracted_currency=curr,
+                    confidence=1.0,
+                    provenance=f"Temporary/reduced salary {curr} {amt_str} from {mid}",
+                ))
+            except ValueError:
+                pass
 
         # Date shift: "confirmed salary is now expected on 2025-05-23"
         date_shift = re.search(r"(?:expected|confirmed)\s+on\s+(\d{4}-\d{2}-\d{2})", text_lower)

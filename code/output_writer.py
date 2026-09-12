@@ -41,3 +41,5 @@ class OutputWriter:
             writer.writeheader()
             for rec in records:
                 writer.writerow(rec.to_csv_dict())
+
+    write_output = write_output_csv
