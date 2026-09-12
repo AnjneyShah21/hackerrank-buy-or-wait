@@ -1,27 +1,42 @@
 # Token Usage and Cost Analysis Report
 
 ## Executive Summary
-This report summarizes the token usage, model calls, and cost metrics for the final full-dataset run of the **Buy or Wait?** AI financial agent.
 
-- **Total Requests Evaluated**: 250
-- **Primary Architecture**: Deterministic Financial Simulation Engine + Rule-Based Fact Extraction (Hybrid Architecture)
-- **Total API Cost**: $0.00 (Zero-Cost Deterministic Core)
+- **Total Requests Evaluated (full dataset):** 250
+- **Architecture:** Deterministic Cash-Flow Simulation Engine + Rule-Based Fact Extraction
+- **Total API Cost:** $0.00 (zero-cost deterministic core)
 
 ## Model Configuration & Usage
 
 | Metric | Detail |
 |:---|:---|
-| **Model Provider** | Local Deterministic Engine (VLM/LLM interfaces ready for optional hybrid call) |
-| **Model Name** | Deterministic Cash-Flow Forecaster |
-| **Total Model Calls** | 250 pipeline executions |
-| **Input Tokens (Total)** | 0 |
-| **Output Tokens (Total)** | 0 |
-| **Average Tokens / Request** | 0.0 |
-| **Estimated Total Cost** | **$0.00** |
-| **Estimated Cost / Request** | **$0.00** |
+| Model Provider | Deterministic Engine (no external API calls) |
+| Model Name | Buy or Wait? Deterministic Cash-Flow Forecaster |
+| Total Model Calls | 250 pipeline executions |
+| Input Tokens (Total) | 0 |
+| Output Tokens (Total) | 0 |
+| Average Tokens / Request | 0.0 |
+| Estimated Total Cost | **$0.00** |
+| Estimated Cost / Request | **$0.00** |
 
-## Per-Request Breakdown Strategy
+## Image & Message Extraction
 
-1. **Unstructured Data Parsing**: 16 image facts and 90 message facts parsed deterministically with pattern-matching interfaces.
-2. **Financial State Reconstruction**: 90-day daily balance simulation across 25,342 transaction events.
-3. **Safety Guarantee**: 100% deterministic decision formulation with zero hallucination risk or floating-point drift.
+| Metric | Value |
+|:---|:---|
+| Image extraction calls | 16 |
+| Image facts extracted | 16 |
+| Message interpretation calls | 215 |
+| Message facts extracted | 90 |
+| Retries | 0 |
+| Cache hits | 0 |
+
+## Runtime
+
+- **Sample evaluation runtime:** 1.82s
+- **Forecast horizon:** 90 days per request
+
+## Per-Request Summary
+
+1. **Evidence Parsing:** 16 image facts + 90 message facts parsed deterministically.
+2. **Financial State:** 90-day daily balance simulation with event deduplication, recurrence detection, and foreign currency conversion.
+3. **Safety Guarantee:** 100% deterministic decision logic — zero hallucination risk.
