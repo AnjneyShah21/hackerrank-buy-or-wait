@@ -93,10 +93,10 @@ class CashFlowForecaster:
 
         if cache_key in self._recurrence_cache:
             return self._recurrence_cache[cache_key]
-        # Filter settled historical events before or on start_dt
+        # Filter settled historical events (and scheduled salary events) before or on start_dt
         past_events = [
             e for e in events
-            if e.status == "settled"
+            if (e.status == "settled" or (e.status == "scheduled" and e.category == "salary"))
             and e.event_date
             and _parse_date(e.event_date) is not None
             and _parse_date(e.event_date) <= start_dt
@@ -171,13 +171,49 @@ class CashFlowForecaster:
                     last_amt = sal_updates[0].extracted_amount
                     avg_amt = last_amt
 
-            # Determine intervals between consecutive occurrences
+            # Filter credit (income) events strictly to prevent over-projecting one-time bonuses
+            if dirn == "credit":
+                ONE_TIME_INCOME_KEYWORDS = {
+                    "arrears", "bonus", "commission", "promotion", "prorated",
+                    "seasonal", "peak-season", "one-time", "reimbursement", "severance",
+                }
+                desc_lower = (last_ev.description or "").lower()
+                if any(kw in desc_lower for kw in ONE_TIME_INCOME_KEYWORDS):
+                    continue
+
+                # Require at least 1 occurrence for salary, 2 for general credit
+                min_req_count = 1 if cat == "salary" else 2
+                if len(ev_list) < min_req_count:
+                    continue
+
+            # Only project debit streams that are essential or fixed flexibility
+            ESSENTIAL_CATEGORIES = {
+                "rent", "housing", "utilities", "debt_repayment", "groceries",
+                "transport", "insurance", "education", "subscription",
+                "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
+            }
+            if dirn == "debit" and last_ev.flexibility != "fixed" and cat not in ESSENTIAL_CATEGORIES:
+                continue
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
             avg_interval = sum(intervals) / len(intervals) if intervals else None
 
-            # 1. Weekly / Short-interval projection (interval 4 to 11 days)
-            if avg_interval and 4 <= avg_interval <= 11:
-                step_days = int(round(avg_interval))
+            # General Multi-cadence Recurrence Generator:
+            # Supports 5-day (4-6), 7-day (6-8), 10-day (9-11), 14-day (12-16), 18-24 day, and 25-35 day (monthly)
+            step_days = None
+            if avg_interval:
+                if 4 <= avg_interval <= 6.5:
+                    step_days = 5
+                elif 6.5 < avg_interval <= 8.5:
+                    step_days = 7
+                elif 8.5 < avg_interval <= 11.5:
+                    step_days = 10
+                elif 11.5 < avg_interval <= 16.5:
+                    step_days = 14
+                elif 16.5 < avg_interval <= 24.5:
+                    step_days = int(round(avg_interval))
+
+            # Execute fixed-interval step projection (for 5, 7, 10, 14, 18-24 day intervals)
+            if step_days and (len(ev_list) >= 3 or cat in fixed_monthly_categories):
                 next_dt = last_dt + timedelta(days=step_days)
                 while next_dt <= end_dt:
                     if next_dt >= start_dt:
@@ -187,7 +223,7 @@ class CashFlowForecaster:
                                 event_id=f"proj_{cat}_{dirn}_{date_str}",
                                 user_id=last_ev.user_id,
                                 event_type=last_ev.event_type,
-                                description=f"Projected {cat}",
+                                description=f"Projected {step_days}-day {cat}",
                                 category=cat,
                                 direction=dirn,
                                 amount=round(avg_amt, 2),
@@ -201,33 +237,7 @@ class CashFlowForecaster:
                             projected.append(proj_ev)
                     next_dt += timedelta(days=step_days)
 
-            # 2. Biweekly / Multi-week projection (interval 12 to 24 days)
-            elif avg_interval and 12 <= avg_interval <= 24:
-                step_days = int(round(avg_interval))
-                next_dt = last_dt + timedelta(days=step_days)
-                while next_dt <= end_dt:
-                    if next_dt >= start_dt:
-                        date_str = next_dt.strftime("%Y-%m-%d")
-                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
-                            proj_ev = FinancialEvent(
-                                event_id=f"proj_{cat}_{dirn}_{date_str}",
-                                user_id=last_ev.user_id,
-                                event_type=last_ev.event_type,
-                                description=f"Projected {cat}",
-                                category=cat,
-                                direction=dirn,
-                                amount=round(avg_amt, 2),
-                                currency=last_ev.currency,
-                                event_date=date_str,
-                                settlement_date=date_str,
-                                status="settled",
-                                flexibility=last_ev.flexibility,
-                                parent_event_id=last_ev.event_id,
-                            )
-                            projected.append(proj_ev)
-                    next_dt += timedelta(days=step_days)
-
-            # 3. Monthly fixed projection (require len(ev_list) >= 2 for debits, >= 1 for salary)
+            # Monthly fixed projection (interval 25 to 35 days, or salary/fixed categories)
             elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
                 # Check for date shift in user facts
                 base_dt = last_dt

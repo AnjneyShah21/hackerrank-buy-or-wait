@@ -75,7 +75,9 @@ class PaymentPlanner:
         actions: List[str] = []
         seen_events: Set[str] = set()
 
-        for ev in events:
+        # Sort events descending by event_date so the most recent parent_event_id is processed first
+        sorted_events = sorted(events, key=lambda x: x.event_date or "", reverse=True)
+        for ev in sorted_events:
             if ev.event_id in seen_events:
                 continue
             if ev.direction != "debit" or ev.amount is None or ev.amount <= 0:
