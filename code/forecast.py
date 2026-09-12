@@ -11,10 +11,15 @@ from code.currency import CurrencyConverter
 from code.models import DailyCashFlow, FinancialEvent, UserProfile
 
 
+from functools import lru_cache
+
+
+@lru_cache(maxsize=8192)
 def _parse_date(date_str: str) -> datetime.date:
-    """Parses YYYY-MM-DD string into a date object."""
+    """Parses YYYY-MM-DD string into a date object with O(1) lru_cache and fast int slicing."""
     try:
-        return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+        s = date_str[:10]
+        return datetime(int(s[:4]), int(s[5:7]), int(s[8:10])).date()
     except Exception:
         return datetime(2026, 1, 1).date()
 
@@ -38,6 +43,7 @@ class CashFlowForecaster:
 
     def __init__(self, currency_converter: CurrencyConverter):
         self.converter = currency_converter
+        self._recurrence_cache: Dict[Tuple[str, str, str], List[FinancialEvent]] = {}
 
     def parse_spending_changes(
         self, spending_changes: Optional[List[str]]
@@ -74,8 +80,15 @@ class CashFlowForecaster:
     ) -> List[FinancialEvent]:
         """
         Detects recurring historical income/expense patterns and projects future instances
-        across the forecast window (start_dt to end_dt).
+        across the forecast window (start_dt to end_dt). Uses caching to avoid repeated computation.
         """
+        user_id = events[0].user_id if events else "unknown"
+        start_str = start_dt.strftime("%Y-%m-%d")
+        end_str = end_dt.strftime("%Y-%m-%d")
+        cache_key = (user_id, start_str, end_str)
+
+        if cache_key in self._recurrence_cache:
+            return self._recurrence_cache[cache_key]
         # Filter settled historical events before or on start_dt
         past_events = [
             e for e in events
@@ -210,6 +223,7 @@ class CashFlowForecaster:
                             projected.append(proj_ev)
                     next_dt += timedelta(days=14)
 
+        self._recurrence_cache[cache_key] = projected
         return projected
 
     def simulate_90_days(

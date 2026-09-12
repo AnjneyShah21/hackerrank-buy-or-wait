@@ -17,6 +17,8 @@ class CurrencyConverter:
         self.exact_rates: Dict[Tuple[str, str, str], float] = {}
         # Key: (from_currency, to_currency) -> list of (rate_date, rate)
         self.pair_rates: Dict[Tuple[str, str], List[Tuple[str, float]]] = {}
+        # O(1) cache for resolved rates: (from_curr, to_curr, date_str) -> (rate, rate_date_used, method)
+        self._resolved_rate_cache: Dict[Tuple[str, str, str], Tuple[float, str, str]] = {}
 
         if exchange_rates:
             self.load_rates(exchange_rates)
@@ -25,6 +27,7 @@ class CurrencyConverter:
         """Indexes exchange rates for exact and nearest-date lookups."""
         self.exact_rates.clear()
         self.pair_rates.clear()
+        self._resolved_rate_cache.clear()
 
         for r in exchange_rates:
             key = (r.rate_date, r.from_currency, r.to_currency)
@@ -53,17 +56,25 @@ class CurrencyConverter:
         if from_curr == to_curr:
             return 1.0, date_str, "identity"
 
+        cache_key = (from_curr, to_curr, date_str[:10])
+        if cache_key in self._resolved_rate_cache:
+            return self._resolved_rate_cache[cache_key]
+
         # 1. Exact match for direct pair
         exact_key = (date_str, from_curr, to_curr)
         if exact_key in self.exact_rates:
-            return self.exact_rates[exact_key], date_str, "exact"
+            res = (self.exact_rates[exact_key], date_str, "exact")
+            self._resolved_rate_cache[cache_key] = res
+            return res
 
         # 2. Exact match for inverse pair
         inv_exact_key = (date_str, to_curr, from_curr)
         if inv_exact_key in self.exact_rates:
             inv_rate = self.exact_rates[inv_exact_key]
             if inv_rate > 0:
-                return round(1.0 / inv_rate, 8), date_str, "inverse_exact"
+                res = (round(1.0 / inv_rate, 8), date_str, "inverse_exact")
+                self._resolved_rate_cache[cache_key] = res
+                return res
 
         # Helper to parse date string for distance calculation
         try:
@@ -81,7 +92,9 @@ class CurrencyConverter:
                     (datetime.strptime(x[0], "%Y-%m-%d") - target_dt).days
                 ),
             )
-            return closest[1], closest[0], "nearest_date"
+            res = (closest[1], closest[0], "nearest_date")
+            self._resolved_rate_cache[cache_key] = res
+            return res
 
         # 4. Nearest date lookup for inverse pair
         inv_pair_key = (to_curr, from_curr)
@@ -94,7 +107,9 @@ class CurrencyConverter:
                 ),
             )
             if closest[1] > 0:
-                return round(1.0 / closest[1], 8), closest[0], "inverse_nearest"
+                res = (round(1.0 / closest[1], 8), closest[0], "inverse_nearest")
+                self._resolved_rate_cache[cache_key] = res
+                return res
 
         raise ValueError(
             f"No exchange rate found for {from_curr} -> {to_curr} on or near {date_str}"
