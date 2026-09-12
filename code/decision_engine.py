@@ -17,7 +17,8 @@ def _plan_rank_key(plan: CandidatePlan, request: FinancialRequest) -> Tuple:
     3. Minimize total amount paid (float)
     4. Start payment earlier (YYYY-MM-DD string)
     5. Use fewer payments (int)
-    6. Final tie-breaker: lowest payment_option_id string
+    6. Higher minimum projected balance (prefer safer headroom)
+    7. Final tie-breaker: lowest payment_option_id string
     """
     # 1. On time by desired_completion_date
     by_deadline = 0 if (plan.completion_date and plan.completion_date <= request.desired_completion_date) else 1
@@ -31,13 +32,16 @@ def _plan_rank_key(plan: CandidatePlan, request: FinancialRequest) -> Tuple:
     # 4. Start payment earlier
     first_date = plan.payments[0][0] if plan.payments else "9999-99-99"
 
-    # 5. Use fewer payments
+    # 5. Use fewer payments (full payment has 1 payment < installments 3+)
     num_payments = len(plan.payments) if plan.payments else 999
 
-    # 6. Lowest payment_option_id
+    # 6. Higher minimum projected balance (safer liquidity headroom tie-breaker)
+    safety_headroom = -plan.min_projected_balance
+
+    # 7. Lowest payment_option_id
     opt_id = plan.payment_option_id or "zzzzzz"
 
-    return (by_deadline, no_spending_changes, total_paid, first_date, num_payments, opt_id)
+    return (by_deadline, no_spending_changes, total_paid, first_date, num_payments, safety_headroom, opt_id)
 
 
 class DecisionEngine:
@@ -92,6 +96,11 @@ class DecisionEngine:
         curr = profile.home_currency
         min_bal = profile.minimum_balance_to_keep
 
+        # For installment plans, amount_safe_to_pay on request_date is the first installment amount
+        effective_safe_amount = amount_safe_to_pay
+        if best_plan.method == "installments" and best_plan.payments:
+            effective_safe_amount = best_plan.payments[0][1]
+
         if best_plan.method == "full_payment" and best_plan.affordability_status == "affordable_now":
             explanation = (
                 f"You can safely pay the full {curr} {request.requested_amount:,.2f} today. "
@@ -99,7 +108,7 @@ class DecisionEngine:
             )
         elif best_plan.method == "partial_payment":
             explanation = (
-                f"Pay {curr} {amount_safe_to_pay:,.2f} on {request.request_date} and the remaining balance on {earliest_date_for_full_payment}. "
+                f"Pay {curr} {effective_safe_amount:,.2f} on {request.request_date} and the remaining balance on {earliest_date_for_full_payment}. "
                 f"This partial schedule completes the request safely by your deadline."
             )
         elif best_plan.method == "installments":
@@ -122,7 +131,7 @@ class DecisionEngine:
 
         return DecisionResult(
             request_id=request.request_id,
-            amount_safe_to_pay=amount_safe_to_pay,
+            amount_safe_to_pay=round(effective_safe_amount, 2),
             affordability_status=best_plan.affordability_status,
             recommended_payment_method=best_plan.method,
             payment_plan=best_plan.payment_plan_str,

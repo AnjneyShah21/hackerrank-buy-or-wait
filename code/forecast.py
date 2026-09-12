@@ -19,6 +19,20 @@ def _parse_date(date_str: str) -> datetime.date:
         return datetime(2026, 1, 1).date()
 
 
+def _add_months(dt: datetime.date, n_months: int) -> datetime.date:
+    """Adds n_months to a date object, clamping day to valid month end."""
+    year = dt.year + (dt.month - 1 + n_months) // 12
+    month = (dt.month - 1 + n_months) % 12 + 1
+    if month in (1, 3, 5, 7, 8, 10, 12):
+        max_d = 31
+    elif month in (4, 6, 9, 11):
+        max_d = 30
+    else:
+        max_d = 29 if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) else 28
+    day = min(dt.day, max_d)
+    return datetime(year, month, day).date()
+
+
 class CashFlowForecaster:
     """Simulates daily user liquidity over a 90-day horizon."""
 
@@ -52,6 +66,152 @@ class CashFlowForecaster:
 
         return stopped_events, reduced_events
 
+    def _project_recurring_events(
+        self,
+        events: List[FinancialEvent],
+        start_dt: datetime.date,
+        end_dt: datetime.date,
+    ) -> List[FinancialEvent]:
+        """
+        Detects recurring historical income/expense patterns and projects future instances
+        across the forecast window (start_dt to end_dt).
+        """
+        # Filter settled historical events before or on start_dt
+        past_events = [
+            e for e in events
+            if e.status == "settled"
+            and e.event_date
+            and _parse_date(e.event_date) <= start_dt
+            and e.amount is not None
+            and e.amount > 0
+            and e.direction in ("debit", "credit")
+        ]
+
+        # Existing explicit future events to prevent duplicate projections
+        existing_future = [
+            e for e in events
+            if e.event_date and _parse_date(e.event_date) > start_dt
+        ]
+        future_category_dates: Dict[str, Set[str]] = {}
+        for fe in existing_future:
+            cat = fe.category or "other"
+            if cat not in future_category_dates:
+                future_category_dates[cat] = set()
+            future_category_dates[cat].add(fe.event_date[:10])
+
+        # Group past events by (category, direction, description) to handle distinct recurring streams
+        grouped: Dict[Tuple[str, str, str], List[FinancialEvent]] = {}
+        for pe in past_events:
+            key = (pe.category or "other", pe.direction, pe.description or "")
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(pe)
+
+        projected: List[FinancialEvent] = []
+
+        fixed_monthly_categories = {
+            "rent", "housing", "utilities", "debt_repayment", "music_subscription",
+            "cloud_storage", "streaming", "gym", "delivery_membership", "insurance",
+            "education", "salary"
+        }
+
+        for (cat, dirn, desc), ev_list in grouped.items():
+            ev_list.sort(key=lambda x: _parse_date(x.event_date or "2026-01-01"))
+            dates = [_parse_date(x.event_date) for x in ev_list]
+            amounts = [x.amount for x in ev_list if x.amount is not None]
+
+            if not dates or not amounts:
+                continue
+
+            last_ev = ev_list[-1]
+            last_dt = dates[-1]
+            last_amt = amounts[-1]
+            avg_amt = sum(amounts) / len(amounts)
+
+            # Determine intervals between consecutive occurrences
+            intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
+            avg_interval = sum(intervals) / len(intervals) if intervals else None
+
+            # Monthly fixed projection
+            if (avg_interval and 25 <= avg_interval <= 35) or cat in fixed_monthly_categories:
+                # Require at least 1 historical occurrence for salary/debits
+                curr_m = 1
+                while True:
+                    next_dt = _add_months(last_dt, curr_m)
+                    if next_dt > end_dt:
+                        break
+                    if next_dt > start_dt:
+                        date_str = next_dt.strftime("%Y-%m-%d")
+                        # Skip if explicit future event already exists around date
+                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
+                            proj_ev = FinancialEvent(
+                                event_id=f"proj_{cat}_{dirn}_{date_str}",
+                                user_id=last_ev.user_id,
+                                event_type=last_ev.event_type,
+                                description=f"Projected {cat}",
+                                category=cat,
+                                direction=dirn,
+                                amount=last_amt if cat in fixed_monthly_categories else round(avg_amt, 2),
+                                currency=last_ev.currency,
+                                event_date=date_str,
+                                settlement_date=date_str,
+                                status="settled",
+                                flexibility=last_ev.flexibility,
+                                minimum_allowed_amount=last_ev.minimum_allowed_amount,
+                            )
+                            projected.append(proj_ev)
+                    curr_m += 1
+
+            # Weekly projection (interval 6 to 8 days)
+            elif avg_interval and 6 <= avg_interval <= 8:
+                next_dt = last_dt + timedelta(days=7)
+                while next_dt <= end_dt:
+                    if next_dt > start_dt:
+                        date_str = next_dt.strftime("%Y-%m-%d")
+                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
+                            proj_ev = FinancialEvent(
+                                event_id=f"proj_{cat}_{dirn}_{date_str}",
+                                user_id=last_ev.user_id,
+                                event_type=last_ev.event_type,
+                                description=f"Projected weekly {cat}",
+                                category=cat,
+                                direction=dirn,
+                                amount=round(avg_amt, 2),
+                                currency=last_ev.currency,
+                                event_date=date_str,
+                                settlement_date=date_str,
+                                status="settled",
+                                flexibility=last_ev.flexibility,
+                            )
+                            projected.append(proj_ev)
+                    next_dt += timedelta(days=7)
+
+            # Biweekly projection (interval 12 to 16 days)
+            elif avg_interval and 12 <= avg_interval <= 16:
+                next_dt = last_dt + timedelta(days=14)
+                while next_dt <= end_dt:
+                    if next_dt > start_dt:
+                        date_str = next_dt.strftime("%Y-%m-%d")
+                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
+                            proj_ev = FinancialEvent(
+                                event_id=f"proj_{cat}_{dirn}_{date_str}",
+                                user_id=last_ev.user_id,
+                                event_type=last_ev.event_type,
+                                description=f"Projected biweekly {cat}",
+                                category=cat,
+                                direction=dirn,
+                                amount=round(avg_amt, 2),
+                                currency=last_ev.currency,
+                                event_date=date_str,
+                                settlement_date=date_str,
+                                status="settled",
+                                flexibility=last_ev.flexibility,
+                            )
+                            projected.append(proj_ev)
+                    next_dt += timedelta(days=14)
+
+        return projected
+
     def simulate_90_days(
         self,
         profile: UserProfile,
@@ -69,6 +229,10 @@ class CashFlowForecaster:
         start_dt = _parse_date(start_date_str)
         end_dt = start_dt + timedelta(days=forecast_days)
 
+        # Generate projected recurring events for the forecast window
+        projected_events = self._project_recurring_events(events, start_dt, end_dt)
+        all_events = events + projected_events
+
         stopped_events, reduced_events = self.parse_spending_changes(spending_changes)
 
         # Proposed payments map: date_str -> list of amounts
@@ -79,13 +243,11 @@ class CashFlowForecaster:
                     proposed_by_date.get(p_date, 0.0) + p_amt
                 )
 
-        # Index event cash flows by date YYYY-MM-DD
-        # We classify events into required_outflows, flexible_outflows, and inflows
         daily_inflows: Dict[str, List[Tuple[str, float]]] = {}
         daily_required_outflows: Dict[str, List[Tuple[str, float]]] = {}
         daily_flexible_outflows: Dict[str, List[Tuple[str, float]]] = {}
 
-        for ev in events:
+        for ev in all_events:
             # 1. Filter out non-cash, cancelled, failed, unrealized investment events
             if (
                 ev.status in ("cancelled", "failed", "unrealized")
@@ -117,10 +279,10 @@ class CashFlowForecaster:
 
             # Process Inflows (Credits)
             if ev.direction == "credit":
-                # Rule: DO NOT count pending credits, bonuses, refunds, lottery, or unconfirmed income
-                if ev.status == "pending":
+                # Rule: DO NOT count pending non-salary credits (bonuses, refunds, lottery, investment gains)
+                if ev.status == "pending" and ev.category not in ("salary", "confirmed_income"):
                     continue
-                # Include confirmed/settled credits
+                # Include confirmed/settled/scheduled credits
                 if ev_dt <= end_dt:
                     d_str = ev_dt.strftime("%Y-%m-%d")
                     if d_str not in daily_inflows:
@@ -220,3 +382,4 @@ class CashFlowForecaster:
             current_balance = ending_bal
 
         return is_safe, min_balance_reached, timeline
+

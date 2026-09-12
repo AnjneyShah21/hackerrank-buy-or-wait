@@ -237,10 +237,24 @@ class PaymentPlanner:
         if not has_safe_ontime_plan:
             spending_actions = self.find_flexible_spending_options(profile, events)
             if spending_actions:
-                # Try single spending changes first
-                for action in spending_actions[:3]:
-                    spending_list = [action]
-                    spending_str = action
+                import itertools
+                action_combos: List[List[str]] = []
+                # Size 1
+                for a in spending_actions[:5]:
+                    action_combos.append([a])
+                # Size 2
+                for combo in itertools.combinations(spending_actions[:5], 2):
+                    ev_ids = [act.split(":")[1] for act in combo if len(act.split(":")) >= 2]
+                    if len(set(ev_ids)) == len(ev_ids):
+                        action_combos.append(list(combo))
+                # Size 3
+                for combo in itertools.combinations(spending_actions[:5], 3):
+                    ev_ids = [act.split(":")[1] for act in combo if len(act.split(":")) >= 2]
+                    if len(set(ev_ids)) == len(ev_ids):
+                        action_combos.append(list(combo))
+
+                for spending_list in action_combos:
+                    spending_str = "|".join(spending_list)
 
                     # Try full payment with spending change
                     if "full_payment" in considered:
