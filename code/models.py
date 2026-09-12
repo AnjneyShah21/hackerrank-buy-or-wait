@@ -54,6 +54,19 @@ class ExchangeRate:
 
 
 @dataclass
+class ConversionAudit:
+    """Audit record tracking deterministic FX conversion parameters and results."""
+    original_amount: float
+    from_currency: str
+    to_currency: str
+    date_str: str
+    rate_used: float
+    rate_date_used: str
+    lookup_method: str   # 'identity' | 'exact' | 'nearest_date' | 'inverse_exact' | 'inverse_nearest'
+    converted_amount: float
+
+
+@dataclass
 class RequestPaymentOption:
     """Represents a provider/seller payment offer from request_payment_options.csv."""
     payment_option_id: str
