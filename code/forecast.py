@@ -43,8 +43,9 @@ def _add_months(dt: datetime.date, n_months: int) -> datetime.date:
 class CashFlowForecaster:
     """Simulates daily user liquidity over a 90-day horizon."""
 
-    def __init__(self, currency_converter: CurrencyConverter):
+    def __init__(self, currency_converter: CurrencyConverter, evidence_manager: Optional[Any] = None):
         self.converter = currency_converter
+        self.evidence_manager = evidence_manager
         self._recurrence_cache: Dict[Tuple[str, str, str], List[FinancialEvent]] = {}
 
     def parse_spending_changes(
@@ -132,6 +133,11 @@ class CashFlowForecaster:
             "education", "salary"
         }
 
+        TERMINAL_SALARY_KEYWORDS = {
+            "final", "last payroll", "terminated", "termination", "severance",
+            "offboarded", "departure", "resignation", "contract ended", "employment ended"
+        }
+
         for (cat, dirn, desc), ev_list in grouped.items():
             ev_list.sort(key=lambda x: _parse_date(x.event_date) or start_dt)
             dates = [d for d in (_parse_date(x.event_date) for x in ev_list) if d is not None]
@@ -145,15 +151,92 @@ class CashFlowForecaster:
             last_amt = amounts[-1]
             avg_amt = sum(amounts) / len(amounts)
 
+            # Check if salary/income stream is terminated via description
+            if cat == "salary":
+                desc_lower = (last_ev.description or "").lower()
+                if any(kw in desc_lower for kw in TERMINAL_SALARY_KEYWORDS):
+                    continue
+
+            # Check user-level evidence facts for contract termination or date shifts
+            user_facts = []
+            if self.evidence_manager and hasattr(self.evidence_manager, "get_user_facts"):
+                user_facts = self.evidence_manager.get_user_facts(last_ev.user_id)
+
+            if cat == "salary" and user_facts:
+                if any(f.fact_kind == "contract_ended" or (f.status_override == "cancelled" and not f.related_event_id) for f in user_facts):
+                    continue
+                # Apply salary amount update if extracted
+                sal_updates = [f for f in user_facts if f.fact_kind == "salary_update" and f.extracted_amount is not None]
+                if sal_updates:
+                    last_amt = sal_updates[0].extracted_amount
+                    avg_amt = last_amt
+
             # Determine intervals between consecutive occurrences
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
             avg_interval = sum(intervals) / len(intervals) if intervals else None
 
-            # Monthly fixed projection (require len(ev_list) >= 2 for debits, >= 1 for salary)
-            if (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
+            # 1. Weekly projection (interval 6 to 8 days)
+            if avg_interval and 6 <= avg_interval <= 8:
+                next_dt = last_dt + timedelta(days=7)
+                while next_dt <= end_dt:
+                    if next_dt > start_dt:
+                        date_str = next_dt.strftime("%Y-%m-%d")
+                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
+                            proj_ev = FinancialEvent(
+                                event_id=f"proj_{cat}_{dirn}_{date_str}",
+                                user_id=last_ev.user_id,
+                                event_type=last_ev.event_type,
+                                description=f"Projected weekly {cat}",
+                                category=cat,
+                                direction=dirn,
+                                amount=round(avg_amt, 2),
+                                currency=last_ev.currency,
+                                event_date=date_str,
+                                settlement_date=date_str,
+                                status="settled",
+                                flexibility=last_ev.flexibility,
+                            )
+                            projected.append(proj_ev)
+                    next_dt += timedelta(days=7)
+
+            # 2. Biweekly projection (interval 12 to 16 days)
+            elif avg_interval and 12 <= avg_interval <= 16:
+                next_dt = last_dt + timedelta(days=14)
+                while next_dt <= end_dt:
+                    if next_dt > start_dt:
+                        date_str = next_dt.strftime("%Y-%m-%d")
+                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
+                            proj_ev = FinancialEvent(
+                                event_id=f"proj_{cat}_{dirn}_{date_str}",
+                                user_id=last_ev.user_id,
+                                event_type=last_ev.event_type,
+                                description=f"Projected biweekly {cat}",
+                                category=cat,
+                                direction=dirn,
+                                amount=round(avg_amt, 2),
+                                currency=last_ev.currency,
+                                event_date=date_str,
+                                settlement_date=date_str,
+                                status="settled",
+                                flexibility=last_ev.flexibility,
+                            )
+                            projected.append(proj_ev)
+                    next_dt += timedelta(days=14)
+
+            # 3. Monthly fixed projection (require len(ev_list) >= 2 for debits, >= 1 for salary)
+            elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
+                # Check for date shift in user facts
+                base_dt = last_dt
+                if cat == "salary" and user_facts:
+                    date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
+                    if date_shifts:
+                        shifted_dt = _parse_date(date_shifts[0].extracted_date)
+                        if shifted_dt and shifted_dt > start_dt:
+                            base_dt = shifted_dt - timedelta(days=30)
+
                 curr_m = 1
                 while True:
-                    next_dt = _add_months(last_dt, curr_m)
+                    next_dt = _add_months(base_dt, curr_m)
                     if next_dt > end_dt:
                         break
                     if next_dt > start_dt:
@@ -177,54 +260,6 @@ class CashFlowForecaster:
                             )
                             projected.append(proj_ev)
                     curr_m += 1
-
-            # Weekly projection (interval 6 to 8 days)
-            elif avg_interval and 6 <= avg_interval <= 8:
-                next_dt = last_dt + timedelta(days=7)
-                while next_dt <= end_dt:
-                    if next_dt > start_dt:
-                        date_str = next_dt.strftime("%Y-%m-%d")
-                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
-                            proj_ev = FinancialEvent(
-                                event_id=f"proj_{cat}_{dirn}_{date_str}",
-                                user_id=last_ev.user_id,
-                                event_type=last_ev.event_type,
-                                description=f"Projected weekly {cat}",
-                                category=cat,
-                                direction=dirn,
-                                amount=round(avg_amt, 2),
-                                currency=last_ev.currency,
-                                event_date=date_str,
-                                settlement_date=date_str,
-                                status="settled",
-                                flexibility=last_ev.flexibility,
-                            )
-                            projected.append(proj_ev)
-                    next_dt += timedelta(days=7)
-
-            # Biweekly projection (interval 12 to 16 days)
-            elif avg_interval and 12 <= avg_interval <= 16:
-                next_dt = last_dt + timedelta(days=14)
-                while next_dt <= end_dt:
-                    if next_dt > start_dt:
-                        date_str = next_dt.strftime("%Y-%m-%d")
-                        if not (cat in future_category_dates and date_str in future_category_dates[cat]):
-                            proj_ev = FinancialEvent(
-                                event_id=f"proj_{cat}_{dirn}_{date_str}",
-                                user_id=last_ev.user_id,
-                                event_type=last_ev.event_type,
-                                description=f"Projected biweekly {cat}",
-                                category=cat,
-                                direction=dirn,
-                                amount=round(avg_amt, 2),
-                                currency=last_ev.currency,
-                                event_date=date_str,
-                                settlement_date=date_str,
-                                status="settled",
-                                flexibility=last_ev.flexibility,
-                            )
-                            projected.append(proj_ev)
-                    next_dt += timedelta(days=14)
 
         self._recurrence_cache[cache_key] = projected
         return projected

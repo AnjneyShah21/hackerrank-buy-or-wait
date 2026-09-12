@@ -193,6 +193,48 @@ class TestGeneralizedFixes(unittest.TestCase):
         ranked = self.decision_engine.rank_plans([plan_inst, plan_full], req)
         self.assertEqual(ranked.method, "full_payment")
 
+    def test_salary_recurrence_termination(self):
+        """Test that salary streams with terminal keywords (e.g. 'Final employer payroll') are not projected."""
+        events = [
+            FinancialEvent(
+                event_id="e_sal1",
+                user_id="u_term",
+                event_type="income",
+                description="Final employer payroll",
+                category="salary",
+                direction="credit",
+                amount=5000.0,
+                currency="USD",
+                event_date="2026-01-15",
+                settlement_date="2026-01-15",
+                status="settled",
+            )
+        ]
+        projected = self.forecaster._project_recurring_events(
+            events,
+            start_dt=datetime(2026, 2, 1).date(),
+            end_dt=datetime(2026, 5, 1).date(),
+        )
+        self.assertEqual(len(projected), 0, "Terminated salary stream must not generate projected events")
+
+    def test_image_extraction_ground_truth(self):
+        """Test that ImageExtractor returns exact verified image values for image_01 (4,365,000 IDR)."""
+        from code.image_extractor import ImageExtractor
+        from code.models import ImageRecord
+        extractor = ImageExtractor()
+        rec = ImageRecord(
+            image_id="image_01",
+            user_id="user_03",
+            request_id="request_03",
+            related_event_id="event_253",
+            file_path="dataset/media/images/image_01.png",
+            file_exists=True,
+        )
+        fact = extractor.extract_fact_from_image(rec)
+        self.assertEqual(fact.extracted_amount, 4365000.0)
+        self.assertEqual(fact.extracted_currency, "IDR")
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -292,6 +292,8 @@ class PaymentPlanner:
                     # Try installment options with spending change
                     if "installments" in considered and options:
                         for opt in options:
+                            if opt.number_of_payments < 2:
+                                continue
                             if (
                                 profile.max_installment_months is not None
                                 and opt.number_of_payments > profile.max_installment_months

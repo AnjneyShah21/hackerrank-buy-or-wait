@@ -32,7 +32,7 @@
 
 ## Runtime
 
-- **Sample evaluation runtime:** 1.32s
+- **Sample evaluation runtime:** 1.96s
 - **Forecast horizon:** 90 days per request
 
 ## Per-Request Summary

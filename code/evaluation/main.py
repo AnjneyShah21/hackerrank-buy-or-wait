@@ -381,9 +381,6 @@ def main():
     evidence_mgr = EvidenceManager()
     img_extractor = ImageExtractor()
     msg_interpreter = MessageInterpreter()
-    forecaster = CashFlowForecaster(converter)
-    fin_engine = FinancialEngine(forecaster)
-    planner = PaymentPlanner(forecaster)
     decision_engine = DecisionEngine()
 
     print("[3/6] Extracting unstructured evidence...")
@@ -400,6 +397,11 @@ def main():
     evidence_mgr.add_facts(msg_facts)
     tracker.msg_calls = len(all_msgs)
     tracker.msg_facts_extracted = len(msg_facts)
+
+    forecaster = CashFlowForecaster(converter, evidence_mgr)
+    fin_engine = FinancialEngine(forecaster)
+    planner = PaymentPlanner(forecaster)
+
     print(f"     {len(img_facts)} image facts, {len(msg_facts)} message facts.")
 
     print("[4/6] Loading sample ground truth from sample_requests.csv...")

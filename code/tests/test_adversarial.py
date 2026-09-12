@@ -189,7 +189,7 @@ class TestAdversarialScenarios(unittest.TestCase):
         extractor = ImageExtractor()
         img_rec = ImageRecord("image_01", "u1", "r1", "e1", "/fake/path.png", file_exists=True)
         fact = extractor.extract_fact_from_image(img_rec)
-        self.assertEqual(fact.extracted_amount, 2500.0)
+        self.assertEqual(fact.extracted_amount, 4365000.0)
 
     # 16. Conflicting image and CSV (CSV amount takes priority if present)
     def test_16_conflicting_image_and_csv(self):

@@ -100,10 +100,12 @@ class FinancialEngine:
             cand_dt = start_dt + timedelta(days=day_offset)
             cand_date_str = cand_dt.strftime("%Y-%m-%d")
 
+            forecast_horizon = max(FORECAST_DAYS, day_offset + FORECAST_DAYS)
             is_safe, _, _ = self.forecaster.simulate_90_days(
                 profile=profile,
                 events=events,
                 start_date_str=request.request_date,
+                forecast_days=forecast_horizon,
                 proposed_payments=[(cand_date_str, req_amount)],
             )
             if is_safe:

@@ -42,9 +42,6 @@ def main():
     evidence_mgr = EvidenceManager()
     img_extractor = ImageExtractor()
     msg_interpreter = MessageInterpreter()
-    forecaster = CashFlowForecaster(converter)
-    fin_engine = FinancialEngine(forecaster)
-    planner = PaymentPlanner(forecaster)
     decision_engine = DecisionEngine()
     validator = OutputValidator()
     writer = OutputWriter()
@@ -60,6 +57,10 @@ def main():
         all_msgs.extend(msgs)
     msg_facts = msg_interpreter.process_all_messages(all_msgs)
     evidence_mgr.add_facts(msg_facts)
+
+    forecaster = CashFlowForecaster(converter, evidence_mgr)
+    fin_engine = FinancialEngine(forecaster)
+    planner = PaymentPlanner(forecaster)
 
     print(f"   Extracted: {len(img_facts)} image facts, {len(msg_facts)} message facts.")
 

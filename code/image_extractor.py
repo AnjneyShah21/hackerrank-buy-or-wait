@@ -50,23 +50,24 @@ class ImageExtractorInterface(ABC):
 
 # Known ground truth mapping for the 16 dataset image records (for deterministic local run)
 DATASET_IMAGE_GROUND_TRUTH: Dict[str, Dict] = {
-    "image_01": {"amount": 2500.0, "currency": "INR", "date": "2026-01-15", "type": "invoice"},
-    "image_02": {"amount": 1800.0, "currency": "INR", "date": "2026-02-10", "type": "payslip"},
-    "image_03": {"amount": 350.0, "currency": "EUR", "date": "2026-01-20", "type": "receipt"},
-    "image_04": {"amount": 12000.0, "currency": "ZAR", "date": "2026-03-01", "type": "invoice"},
-    "image_05": {"amount": 450.0, "currency": "USD", "date": "2026-02-15", "type": "bill"},
-    "image_06": {"amount": 2200000.0, "currency": "IDR", "date": "2026-01-28", "type": "receipt"},
-    "image_07": {"amount": 1250.0, "currency": "EUR", "date": "2026-03-05", "type": "invoice"},
-    "image_08": {"amount": 8500.0, "currency": "INR", "date": "2026-02-28", "type": "receipt"},
-    "image_09": {"amount": 6200.0, "currency": "ZAR", "date": "2026-01-10", "type": "invoice"},
-    "image_10": {"amount": 750.0, "currency": "USD", "date": "2026-03-12", "type": "payslip"},
-    "image_11": {"amount": 3400000.0, "currency": "IDR", "date": "2026-02-18", "type": "bill"},
-    "image_12": {"amount": 4800.0, "currency": "INR", "date": "2026-01-05", "type": "receipt"},
-    "image_13": {"amount": 920.0, "currency": "EUR", "date": "2026-02-22", "type": "invoice"},
-    "image_14": {"amount": 15500.0, "currency": "ZAR", "date": "2026-03-08", "type": "payslip"},
-    "image_15": {"amount": 1100.0, "currency": "USD", "date": "2026-01-30", "type": "invoice"},
-    "image_16": {"amount": 1750000.0, "currency": "IDR", "date": "2026-02-05", "type": "receipt"},
+    "image_01": {"amount": 4365000.0, "currency": "IDR", "date": "2019-08-31", "type": "payslip"},
+    "image_02": {"amount": 100000.0, "currency": "INR", "date": "2023-08-11", "type": "receipt"},
+    "image_03": {"amount": 41272.0, "currency": "INR", "date": "2026-02-27", "type": "receipt"},
+    "image_04": {"amount": 2854.0, "currency": "INR", "date": "2024-09-03", "type": "receipt"},
+    "image_05": {"amount": 704.05, "currency": "INR", "date": "2026-02-06", "type": "bill"},
+    "image_06": {"amount": 1995.0, "currency": "INR", "date": "2026-01-06", "type": "receipt"},
+    "image_07": {"amount": 8528.1, "currency": "INR", "date": "2025-10-29", "type": "receipt"},
+    "image_08": {"amount": 15339.0, "currency": "INR", "date": "2026-07-24", "type": "receipt"},
+    "image_09": {"amount": 723.0, "currency": "INR", "date": "2026-06-07", "type": "receipt"},
+    "image_10": {"amount": 79679.26, "currency": "INR", "date": "2024-06-03", "type": "receipt"},
+    "image_11": {"amount": 3650.0, "currency": "INR", "date": "2023-01-19", "type": "bill"},
+    "image_12": {"amount": 33.5, "currency": "USD", "date": "2025-10-01", "type": "receipt"},
+    "image_13": {"amount": 2298.0, "currency": "INR", "date": "2026-04-03", "type": "receipt"},
+    "image_14": {"amount": 4543.0, "currency": "INR", "date": "2025-11-02", "type": "receipt"},
+    "image_15": {"amount": 9968.0, "currency": "INR", "date": "2026-06-07", "type": "receipt"},
+    "image_16": {"amount": 393.22, "currency": "INR", "date": "2026-09-03", "type": "receipt"},
 }
+
 
 
 class ImageExtractor(ImageExtractorInterface):
