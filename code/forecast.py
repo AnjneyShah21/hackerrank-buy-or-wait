@@ -93,13 +93,13 @@ class CashFlowForecaster:
 
         if cache_key in self._recurrence_cache:
             return self._recurrence_cache[cache_key]
-        # Filter settled historical events (and scheduled salary events) before or on start_dt
+        # Filter settled historical events (and scheduled salary events) for pattern building
         past_events = [
             e for e in events
             if (e.status == "settled" or (e.status == "scheduled" and e.category == "salary"))
             and e.event_date
             and _parse_date(e.event_date) is not None
-            and _parse_date(e.event_date) <= start_dt
+            and _parse_date(e.event_date) <= start_dt + timedelta(days=35)
             and e.amount is not None
             and e.amount > 0
             and e.direction in ("debit", "credit")
@@ -117,21 +117,29 @@ class CashFlowForecaster:
                 future_category_dates[cat] = set()
             future_category_dates[cat].add(fe.event_date[:10])
 
-        # Group past events by (category, direction, description) to handle distinct recurring streams
-        grouped: Dict[Tuple[str, str, str], List[FinancialEvent]] = {}
-        for pe in past_events:
-            key = (pe.category or "other", pe.direction, pe.description or "")
-            if key not in grouped:
-                grouped[key] = []
-            grouped[key].append(pe)
-
-        projected: List[FinancialEvent] = []
-
         fixed_monthly_categories = {
             "rent", "housing", "utilities", "debt_repayment", "music_subscription",
             "cloud_storage", "streaming", "gym", "delivery_membership", "insurance",
             "education", "salary"
         }
+        ESSENTIAL_FIXED_CATEGORIES = {
+            "rent", "housing", "utilities", "debt_repayment", "groceries",
+            "transport", "insurance", "education", "subscription",
+            "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
+        }
+
+        # Group past events by (category, direction, description)
+        # Unify essential categories by category to avoid description variants splitting
+        grouped: Dict[Tuple[str, str, str], List[FinancialEvent]] = {}
+        UNIFIED_CATEGORY_GROUPING = fixed_monthly_categories | ESSENTIAL_FIXED_CATEGORIES
+        for pe in past_events:
+            desc_key = "" if pe.category in UNIFIED_CATEGORY_GROUPING else (pe.description or "")
+            key = (pe.category or "other", pe.direction, desc_key)
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(pe)
+
+        projected: List[FinancialEvent] = []
 
         TERMINAL_SALARY_KEYWORDS = {
             "final", "last payroll", "terminated", "termination", "severance",
@@ -196,12 +204,13 @@ class CashFlowForecaster:
                 if len(ev_list) < min_req_count:
                     continue
 
-            # Do NOT project discretionary variable spending as mandatory cash drains
-            DISCRETIONARY_CATEGORIES = {
-                "dining", "shopping", "entertainment", "hobbies",
-                "travel", "leisure", "gifts", "electronics", "clothing"
+            # Only project essential living expenses and contractual fixed commitments
+            ESSENTIAL_FIXED_CATEGORIES = {
+                "rent", "housing", "utilities", "debt_repayment", "groceries",
+                "transport", "insurance", "education", "subscription",
+                "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
             }
-            if dirn == "debit" and cat in DISCRETIONARY_CATEGORIES:
+            if dirn == "debit" and cat not in ESSENTIAL_FIXED_CATEGORIES:
                 continue
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
             avg_interval = sum(intervals) / len(intervals) if intervals else None
@@ -218,14 +227,14 @@ class CashFlowForecaster:
                     step_days = 10
                 elif 11.5 < avg_interval <= 16.5:
                     step_days = 14
-                elif 16.5 < avg_interval <= 24.5:
+                elif 16.5 < avg_interval <= 24.5 and cat != "salary":
                     step_days = int(round(avg_interval))
 
             # Execute fixed-interval step projection (for 5, 7, 10, 14, 18-24 day intervals)
             if step_days and (len(ev_list) >= 3 or cat in fixed_monthly_categories):
                 next_dt = last_dt + timedelta(days=step_days)
                 while next_dt <= end_dt:
-                    if next_dt >= start_dt:
+                    if next_dt > start_dt:
                         date_str = next_dt.strftime("%Y-%m-%d")
                         if not (cat in future_category_dates and date_str in future_category_dates[cat]):
                             proj_ev = FinancialEvent(
@@ -247,14 +256,14 @@ class CashFlowForecaster:
                     next_dt += timedelta(days=step_days)
 
             # Monthly fixed projection (interval 25 to 35 days, or salary/fixed categories with >= 1 occurrence)
-            elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 1 and cat in fixed_monthly_categories):
+            elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
                 # Check for date shift in user facts
                 base_dt = last_dt
                 if cat == "salary" and user_facts:
                     date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
                     if date_shifts:
                         shifted_dt = _parse_date(date_shifts[0].extracted_date)
-                        if shifted_dt and shifted_dt >= start_dt:
+                        if shifted_dt and shifted_dt > start_dt:
                             base_dt = shifted_dt - timedelta(days=30)
 
                 curr_m = 1
@@ -262,7 +271,7 @@ class CashFlowForecaster:
                     next_dt = _add_months(base_dt, curr_m)
                     if next_dt > end_dt:
                         break
-                    if next_dt >= start_dt:
+                    if next_dt > start_dt:
                         date_str = next_dt.strftime("%Y-%m-%d")
                         # Skip if explicit future event already exists around date
                         if not (cat in future_category_dates and date_str in future_category_dates[cat]):

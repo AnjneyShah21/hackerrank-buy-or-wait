@@ -31,7 +31,8 @@ from code.financial_engine import FinancialEngine
 from code.forecast import CashFlowForecaster
 from code.image_extractor import ImageExtractor
 from code.message_interpreter import MessageInterpreter
-from code.models import FinancialEvent, FinancialRequest, OutputRecord
+from code.models import FinancialEvent, FinancialRequest
+from code.output_writer import OutputWriter
 from code.payment_planner import PaymentPlanner
 from code.validator import OutputValidator
 
@@ -147,16 +148,7 @@ def run_pipeline_on_requests(
             decision = decision_engine.make_decision(req, profile, amt_safe, earliest_date, best)
             decision_engine.assert_explanation_consistency(decision)
 
-            record = OutputRecord(
-                request_id=decision.request_id,
-                amount_safe_to_pay=str(decision.amount_safe_to_pay),
-                affordability_status=decision.affordability_status,
-                recommended_payment_method=decision.recommended_payment_method,
-                payment_plan=decision.payment_plan,
-                earliest_date_for_full_payment=decision.earliest_date_for_full_payment or "",
-                spending_changes_needed=decision.spending_changes_needed,
-                decision_explanation=decision.decision_explanation,
-            )
+            record = OutputWriter.decision_to_record(decision)
             is_valid, errs = validator.validate_row(record, req)
             if not is_valid:
                 tracker.validation_errors += 1

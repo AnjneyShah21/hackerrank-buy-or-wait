@@ -29,19 +29,22 @@ def _plan_rank_key(plan: CandidatePlan, request: FinancialRequest) -> Tuple:
     # 3. Minimize total amount paid
     total_paid = plan.total_payable if plan.total_payable > 0 else request.requested_amount
 
-    # 4. Start payment earlier
+    # 4. Complete full request earlier (earlier final payment date)
+    comp_date = plan.completion_date or "9999-99-99"
+
+    # 5. Start payment earlier
     first_date = plan.payments[0][0] if plan.payments else "9999-99-99"
 
-    # 5. Use fewer payments (full payment has 1 payment < installments 3+)
+    # 6. Use fewer payments
     num_payments = len(plan.payments) if plan.payments else 999
 
-    # 6. Higher minimum projected balance (safer liquidity headroom tie-breaker)
+    # 7. Higher minimum projected balance (safer liquidity headroom tie-breaker)
     safety_headroom = -plan.min_projected_balance
 
-    # 7. Lowest payment_option_id
+    # 8. Lowest payment_option_id
     opt_id = plan.payment_option_id or "zzzzzz"
 
-    return (by_deadline, no_spending_changes, total_paid, first_date, num_payments, safety_headroom, opt_id)
+    return (by_deadline, no_spending_changes, total_paid, comp_date, first_date, num_payments, safety_headroom, opt_id)
 
 
 class DecisionEngine:
