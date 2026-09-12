@@ -112,16 +112,7 @@ def main():
         decision_engine.assert_explanation_consistency(decision)
 
         # Build OutputRecord
-        out_rec = OutputRecord(
-            request_id=decision.request_id,
-            amount_safe_to_pay=str(decision.amount_safe_to_pay),
-            affordability_status=decision.affordability_status,
-            recommended_payment_method=decision.recommended_payment_method,
-            payment_plan=decision.payment_plan,
-            earliest_date_for_full_payment=decision.earliest_date_for_full_payment,
-            spending_changes_needed=decision.spending_changes_needed,
-            decision_explanation=decision.decision_explanation,
-        )
+        out_rec = OutputWriter.decision_to_record(decision)
         output_records.append(out_rec)
 
     print("4. Validating output records against contract invariants...")

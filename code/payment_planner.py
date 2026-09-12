@@ -194,6 +194,10 @@ class PaymentPlanner:
         # ── 3. Installments (No spending changes) ───────────────────────────
         if "installments" in considered and options:
             for opt in options:
+                # Installment plans by definition require >= 2 payments
+                if opt.number_of_payments < 2:
+                    continue
+
                 # Respect max_installment_months constraint if set
                 if (
                     profile.max_installment_months is not None

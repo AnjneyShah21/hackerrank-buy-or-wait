@@ -15,13 +15,15 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=8192)
-def _parse_date(date_str: str) -> datetime.date:
+def _parse_date(date_str: str) -> Optional[datetime.date]:
     """Parses YYYY-MM-DD string into a date object with O(1) lru_cache and fast int slicing."""
+    if not date_str:
+        return None
     try:
         s = date_str[:10]
         return datetime(int(s[:4]), int(s[5:7]), int(s[8:10])).date()
     except Exception:
-        return datetime(2026, 1, 1).date()
+        return None
 
 
 def _add_months(dt: datetime.date, n_months: int) -> datetime.date:
@@ -85,7 +87,8 @@ class CashFlowForecaster:
         user_id = events[0].user_id if events else "unknown"
         start_str = start_dt.strftime("%Y-%m-%d")
         end_str = end_dt.strftime("%Y-%m-%d")
-        cache_key = (user_id, start_str, end_str)
+        events_sig = tuple(sorted((e.event_id, e.status, str(e.amount)) for e in events))
+        cache_key = (user_id, start_str, end_str, events_sig)
 
         if cache_key in self._recurrence_cache:
             return self._recurrence_cache[cache_key]
@@ -94,6 +97,7 @@ class CashFlowForecaster:
             e for e in events
             if e.status == "settled"
             and e.event_date
+            and _parse_date(e.event_date) is not None
             and _parse_date(e.event_date) <= start_dt
             and e.amount is not None
             and e.amount > 0
@@ -103,7 +107,7 @@ class CashFlowForecaster:
         # Existing explicit future events to prevent duplicate projections
         existing_future = [
             e for e in events
-            if e.event_date and _parse_date(e.event_date) > start_dt
+            if e.event_date and _parse_date(e.event_date) is not None and _parse_date(e.event_date) > start_dt
         ]
         future_category_dates: Dict[str, Set[str]] = {}
         for fe in existing_future:
@@ -129,8 +133,8 @@ class CashFlowForecaster:
         }
 
         for (cat, dirn, desc), ev_list in grouped.items():
-            ev_list.sort(key=lambda x: _parse_date(x.event_date or "2026-01-01"))
-            dates = [_parse_date(x.event_date) for x in ev_list]
+            ev_list.sort(key=lambda x: _parse_date(x.event_date) or start_dt)
+            dates = [d for d in (_parse_date(x.event_date) for x in ev_list) if d is not None]
             amounts = [x.amount for x in ev_list if x.amount is not None]
 
             if not dates or not amounts:
@@ -145,9 +149,8 @@ class CashFlowForecaster:
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
             avg_interval = sum(intervals) / len(intervals) if intervals else None
 
-            # Monthly fixed projection
-            if (avg_interval and 25 <= avg_interval <= 35) or cat in fixed_monthly_categories:
-                # Require at least 1 historical occurrence for salary/debits
+            # Monthly fixed projection (require len(ev_list) >= 2 for debits, >= 1 for salary)
+            if (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
                 curr_m = 1
                 while True:
                     next_dt = _add_months(last_dt, curr_m)
@@ -168,7 +171,7 @@ class CashFlowForecaster:
                                 currency=last_ev.currency,
                                 event_date=date_str,
                                 settlement_date=date_str,
-                                status="settled",
+                                status="scheduled",
                                 flexibility=last_ev.flexibility,
                                 minimum_allowed_amount=last_ev.minimum_allowed_amount,
                             )
@@ -279,10 +282,16 @@ class CashFlowForecaster:
                 continue
 
             ev_dt = _parse_date(effective_date_str)
+            if not ev_dt:
+                continue
 
             # Skip events occurring before start_date (already reflected in initial available balance)
+            # EXCEPTION: Pending debits before start_date have NOT settled, so reserve them on start_date
             if ev_dt < start_dt:
-                continue
+                if ev.direction == "debit" and ev.status == "pending":
+                    ev_dt = start_dt
+                else:
+                    continue
 
             # Convert event amount to profile home currency if different
             amt_home = ev.amount
@@ -294,7 +303,7 @@ class CashFlowForecaster:
             # Process Inflows (Credits)
             if ev.direction == "credit":
                 # Rule: DO NOT count pending non-salary credits (bonuses, refunds, lottery, investment gains)
-                if ev.status == "pending" and ev.category not in ("salary", "confirmed_income"):
+                if ev.status == "pending" and ev.category != "salary":
                     continue
                 # Include confirmed/settled/scheduled credits
                 if ev_dt <= end_dt:

@@ -73,17 +73,33 @@ class DecisionEngine:
         best_plan: Optional[CandidatePlan],
     ) -> DecisionResult:
         """Formulates final DecisionResult with human-readable, grounded explanation."""
+        curr = profile.home_currency
+        min_bal = profile.minimum_balance_to_keep
+        req_amt = request.requested_amount
+        req_date = request.request_date
 
-        # Fallback when no safe plan is available
+        # For installment plans, amount_safe_to_pay on request_date is the first installment amount
+        effective_safe_amount = amount_safe_to_pay
+        if best_plan and best_plan.method == "installments" and best_plan.payments:
+            effective_safe_amount = best_plan.payments[0][1]
+        effective_safe_amount = max(0.0, min(effective_safe_amount, req_amt))
+
+        # ── Fallback when no safe plan is available ─────────────────────────
         if best_plan is None or best_plan.method == "not_recommended":
-            explanation = (
-                f"Do not proceed with the {profile.home_currency} {request.requested_amount:,.2f} request. "
-                f"The full amount cannot be completed safely within 90 days while maintaining "
-                f"the required {profile.home_currency} {profile.minimum_balance_to_keep:,.2f} minimum balance."
-            )
-            return DecisionResult(
+            if earliest_date_for_full_payment:
+                explanation = (
+                    f"Do not proceed with paying {curr} {req_amt:,.2f} today. "
+                    f"Only {curr} {amount_safe_to_pay:,.2f} is safe on {req_date} without dropping below your required {curr} {min_bal:,.2f} minimum balance. "
+                    f"Wait until {earliest_date_for_full_payment} when confirmed income settles."
+                )
+            else:
+                explanation = (
+                    f"Do not proceed with the {curr} {req_amt:,.2f} request. "
+                    f"Paying this amount cannot be completed safely within 90 days while maintaining your required {curr} {min_bal:,.2f} minimum balance."
+                )
+            res = DecisionResult(
                 request_id=request.request_id,
-                amount_safe_to_pay=amount_safe_to_pay,
+                amount_safe_to_pay=round(amount_safe_to_pay, 2),
                 affordability_status="not_affordable",
                 recommended_payment_method="not_recommended",
                 payment_plan="none",
@@ -91,45 +107,45 @@ class DecisionEngine:
                 spending_changes_needed="none",
                 decision_explanation=explanation,
             )
+            self.assert_explanation_consistency(res)
+            return res
 
-        # Grounded explanation generation based on best_plan method
-        curr = profile.home_currency
-        min_bal = profile.minimum_balance_to_keep
-
-        # For installment plans, amount_safe_to_pay on request_date is the first installment amount
-        effective_safe_amount = amount_safe_to_pay
-        if best_plan.method == "installments" and best_plan.payments:
-            effective_safe_amount = best_plan.payments[0][1]
-
+        # ── Grounded explanations for safe recommendations ──────────────────
         if best_plan.method == "full_payment" and best_plan.affordability_status == "affordable_now":
             explanation = (
-                f"You can safely pay the full {curr} {request.requested_amount:,.2f} today. "
-                f"Your balance remains safely above your {curr} {min_bal:,.2f} minimum balance throughout the forecast period."
+                f"You can safely pay the full {curr} {req_amt:,.2f} today. "
+                f"Your balance remains safely above your {curr} {min_bal:,.2f} minimum balance throughout the 90-day forecast."
             )
+
         elif best_plan.method == "partial_payment":
+            rem_amt = round(req_amt - effective_safe_amount, 2)
             explanation = (
-                f"Pay {curr} {effective_safe_amount:,.2f} on {request.request_date} and the remaining balance on {earliest_date_for_full_payment}. "
-                f"This partial schedule completes the request safely by your deadline."
+                f"Pay {curr} {effective_safe_amount:,.2f} today on {req_date} and the remaining {curr} {rem_amt:,.2f} on {earliest_date_for_full_payment}. "
+                f"This partial schedule completes your {curr} {req_amt:,.2f} request safely by your deadline."
             )
+
         elif best_plan.method == "installments":
+            opt_str = f"option {best_plan.payment_option_id}" if best_plan.payment_option_id else "installment plan"
             explanation = (
-                f"Use installment plan {best_plan.payment_option_id or ''} ({best_plan.payment_plan_str}). "
-                f"This schedule fits your cash flow while preserving your {curr} {min_bal:,.2f} minimum balance."
+                f"Use {opt_str} ({best_plan.payment_plan_str}). "
+                f"Paying {curr} {effective_safe_amount:,.2f} today fits your cash flow while preserving your required {curr} {min_bal:,.2f} minimum balance."
             )
+
         elif best_plan.method == "wait":
             explanation = (
-                f"Wait until {earliest_date_for_full_payment} to make the full payment of {curr} {request.requested_amount:,.2f}. "
-                f"Your balance will reach safe levels on that date."
+                f"Wait until {earliest_date_for_full_payment} to make the full payment of {curr} {req_amt:,.2f}. "
+                f"Your current safe limit today is {curr} {amount_safe_to_pay:,.2f}, but confirmed income on {earliest_date_for_full_payment} makes full payment safe."
             )
-        elif best_plan.spending_changes_str != "none":
-            explanation = (
-                f"Proceed with {best_plan.method.replace('_', ' ')} after adjusting flexible expenses ({best_plan.spending_changes_str}). "
-                f"This preserves your required {curr} {min_bal:,.2f} minimum balance."
-            )
-        else:
-            explanation = f"Proceed with {best_plan.method.replace('_', ' ')} according to schedule {best_plan.payment_plan_str}."
 
-        return DecisionResult(
+        else:
+            explanation = (
+                f"Proceed with {best_plan.method.replace('_', ' ')} according to schedule {best_plan.payment_plan_str}."
+            )
+
+        if best_plan.spending_changes_str != "none":
+            explanation += f" Requires spending adjustments: {best_plan.spending_changes_str}."
+
+        res = DecisionResult(
             request_id=request.request_id,
             amount_safe_to_pay=round(effective_safe_amount, 2),
             affordability_status=best_plan.affordability_status,
@@ -139,6 +155,8 @@ class DecisionEngine:
             spending_changes_needed=best_plan.spending_changes_str,
             decision_explanation=explanation,
         )
+        self.assert_explanation_consistency(res)
+        return res
 
     def assert_explanation_consistency(self, result: DecisionResult):
         """
@@ -147,19 +165,22 @@ class DecisionEngine:
         """
         exp_lower = result.decision_explanation.lower()
 
-        # 1. Not affordable consistency
+        # 1. Non-empty check
+        assert len(result.decision_explanation.strip()) > 0, "decision_explanation cannot be empty"
+
+        # 2. Not affordable consistency
         if result.affordability_status == "not_affordable":
-            assert "do not proceed" in exp_lower or "cannot" in exp_lower or "not recommended" in exp_lower, \
+            assert any(k in exp_lower for k in ("do not proceed", "cannot", "not recommended", "insufficient")), \
                 f"Explanation contradicts not_affordable status: '{result.decision_explanation}'"
 
-        # 2. Affordable now consistency
+        # 3. Affordable now consistency
         if result.affordability_status == "affordable_now":
-            assert "safely pay" in exp_lower or "full" in exp_lower, \
+            assert any(k in exp_lower for k in ("safely pay", "full", "today")), \
                 f"Explanation contradicts affordable_now status: '{result.decision_explanation}'"
 
-        # 3. Method match check
+        # 4. Method match check
         if result.recommended_payment_method == "not_recommended":
             assert result.payment_plan == "none", "payment_plan must be 'none' when recommended_payment_method is 'not_recommended'"
 
-        # 4. Amount safe to pay bounds check
+        # 5. Amount safe to pay bounds check
         assert result.amount_safe_to_pay >= 0, "amount_safe_to_pay cannot be negative"

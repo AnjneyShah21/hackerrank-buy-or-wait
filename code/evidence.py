@@ -113,10 +113,12 @@ class EvidenceManager:
                 else:
                     chosen_amount = min(amounts)
 
+        status_applied = False
         for fact in resolved_facts:
             # 1. Explicit Status Override (cancellation, pending, settled)
-            if fact.status_override:
+            if fact.status_override and not status_applied:
                 event.status = fact.status_override
+                status_applied = True
 
             # 2. Date Override / Shift
             if fact.extracted_date:

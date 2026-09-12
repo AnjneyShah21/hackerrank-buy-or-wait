@@ -143,6 +143,7 @@ class TestAdversarialScenarios(unittest.TestCase):
     def test_10_recurring_expense_immediately_after_purchase(self):
         events = [
             FinancialEvent("s1", "adv_user", "income", "Salary", "salary", "credit", 2000.0, "USD", "2026-02-15", "2026-02-15", "settled"),
+            FinancialEvent("r0", "adv_user", "expense", "Rent", "rent", "debit", 1000.0, "USD", "2026-01-02", "2026-01-02", "settled"),
             FinancialEvent("r1", "adv_user", "expense", "Rent", "rent", "debit", 1000.0, "USD", "2026-02-02", "2026-02-02", "settled")
         ]
         # Request on March 1. Recurring rent projects to March 2.

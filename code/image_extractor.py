@@ -165,7 +165,27 @@ class ImageExtractor(ImageExtractorInterface):
             self._cached_facts[img_id] = fact
             return fact
 
-        # 4. Fallback for unmapped image files
+        # 4. Fallback for unmapped image files: attempt dynamic VLM/OCR if use_vlm or GEMINI_API_KEY is present
+        if self.use_vlm or os.environ.get("GEMINI_API_KEY"):
+            vision_result = self._extract_via_ai_vision(image_record)
+            if vision_result and (vision_result.get("amount") is not None or vision_result.get("currency") is not None):
+                fact = ExtractedFact(
+                    fact_id=f"fact_{img_id}",
+                    source_type="image",
+                    source_id=img_id,
+                    user_id=image_record.user_id,
+                    related_event_id=image_record.related_event_id,
+                    request_id=image_record.request_id,
+                    fact_kind="amount_override",
+                    extracted_amount=vision_result.get("amount"),
+                    extracted_currency=vision_result.get("currency"),
+                    extracted_date=vision_result.get("date"),
+                    confidence=0.9,
+                    provenance=f"Dynamic VLM extraction for {img_id}",
+                )
+                self._cached_facts[img_id] = fact
+                return fact
+
         fact = ExtractedFact(
             fact_id=f"fact_{img_id}",
             source_type="image",
@@ -180,6 +200,39 @@ class ImageExtractor(ImageExtractorInterface):
         )
         self._cached_facts[img_id] = fact
         return fact
+
+    def _extract_via_ai_vision(self, image_record: ImageRecord) -> Optional[Dict]:
+        """Performs VLM image extraction using Gemini Vision API if GEMINI_API_KEY is available."""
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            return None
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            with open(image_record.file_path, "rb") as f:
+                img_bytes = f.read()
+            prompt = (
+                "Extract financial details from this document. "
+                "Return JSON with keys: amount (float or null), currency (3-letter uppercase or null), date (YYYY-MM-DD or null)."
+            )
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    genai.types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
+                    prompt,
+                ]
+            )
+            clean_text = sanitize_untrusted_text(response.text)
+            amt_match = re.search(r'"amount"\s*:\s*([\d\.]+)', clean_text)
+            curr_match = re.search(r'"currency"\s*:\s*"([A-Z]{3})"', clean_text)
+            date_match = re.search(r'"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"', clean_text)
+            return {
+                "amount": float(amt_match.group(1)) if amt_match else None,
+                "currency": curr_match.group(1) if curr_match else None,
+                "date": date_match.group(1) if date_match else None,
+            }
+        except Exception:
+            return None
 
     def process_all_images(self, image_records: List[ImageRecord]) -> List[ExtractedFact]:
         """Processes all image records and returns extracted facts."""
