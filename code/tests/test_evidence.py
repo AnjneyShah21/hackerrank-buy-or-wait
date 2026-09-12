@@ -179,6 +179,22 @@ class TestUnstructuredEvidenceLayer(unittest.TestCase):
 
         self.assertEqual(updated_evt.amount, 1188.0)
 
+    def test_indonesian_salary_update_message(self):
+        msg = MessageRecord(
+            message_id="msg_id_salary",
+            user_id="user_test",
+            request_id="req_01",
+            related_event_id=None,
+            sent_at="2026-01-01T09:00:00Z",
+            source_type="employer",
+            message_text="Gaji pokok yang dikonfirmasi adalah IDR 38760000.",
+        )
+        facts = self.msg_interpreter.interpret_message(msg)
+        salary_facts = [f for f in facts if f.fact_kind == "salary_update"]
+        self.assertEqual(len(salary_facts), 1)
+        self.assertEqual(salary_facts[0].extracted_amount, 38760000.0)
+        self.assertEqual(salary_facts[0].extracted_currency, "IDR")
+
     # 7. Conflicting Evidence (Financially Safer Precedence Rule)
     def test_conflicting_evidence_precedence(self):
         """

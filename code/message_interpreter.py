@@ -103,6 +103,35 @@ class MessageInterpreter:
             except ValueError:
                 pass
 
+        # Indonesian payroll updates used by the dataset, e.g.:
+        # "Gaji bulanan Anda naik menjadi IDR 42750000" and
+        # "Gaji pokok yang dikonfirmasi adalah IDR 38760000".
+        id_salary = re.search(
+            r"(?:gaji\s+bulanan\s+anda\s+naik\s+menjadi|"
+            r"gaji\s+pokok\s+yang\s+dikonfirmasi\s+adalah)\s+"
+            r"([A-Z]{3})\s+([\d,.]+)",
+            clean_text,
+            re.IGNORECASE,
+        )
+        if id_salary and not sal_inc:
+            curr, amt_str = id_salary.group(1).upper(), id_salary.group(2).replace(",", "").rstrip(".")
+            try:
+                facts.append(ExtractedFact(
+                    fact_id=f"fact_{mid}_id_salary",
+                    source_type="message",
+                    source_id=mid,
+                    user_id=message.user_id,
+                    related_event_id=message.related_event_id,
+                    request_id=message.request_id,
+                    fact_kind="salary_update",
+                    extracted_amount=float(amt_str),
+                    extracted_currency=curr,
+                    confidence=1.0,
+                    provenance=f"Indonesian salary update to {curr} {amt_str} from {mid}",
+                ))
+            except ValueError:
+                pass
+
         # Temporary reduced pay: "temporary monthly pay is EUR 1750.32" / "reduced to USD 1731.60"
         temp_pay = re.search(r"(?:temporary\s+monthly\s+pay\s+is|reduced\s+to)\s+([A-Z]{3})\s+([\d,\.]+)", clean_text, re.IGNORECASE)
         if temp_pay and not sal_inc:

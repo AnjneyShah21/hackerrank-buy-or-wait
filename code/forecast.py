@@ -4,7 +4,7 @@ Evaluates balance trajectory against minimum_balance_to_keep deterministically.
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from code.config import FORECAST_DAYS
 from code.currency import CurrencyConverter
@@ -12,6 +12,24 @@ from code.models import DailyCashFlow, FinancialEvent, UserProfile
 
 
 from functools import lru_cache
+
+
+_ONE_TIME_INCOME_KEYWORDS = {
+    "arrears", "bonus", "commission", "promotion", "prorated",
+    "seasonal", "peak-season", "one-time", "reimbursement", "severance",
+}
+_STABLE_SALARY_KEYWORDS = {
+    "salary", "payroll", "wage", "employer", "paycheck",
+    "next confirmed salary", "regular income",
+}
+
+
+def _is_one_time_income_event(event: FinancialEvent) -> bool:
+    """Return whether a credit should be excluded from recurrence learning."""
+    if event.direction != "credit":
+        return False
+    description = (event.description or "").lower()
+    return any(keyword in description for keyword in _ONE_TIME_INCOME_KEYWORDS)
 
 
 @lru_cache(maxsize=8192)
@@ -103,6 +121,7 @@ class CashFlowForecaster:
             and e.amount is not None
             and e.amount > 0
             and e.direction in ("debit", "credit")
+            and not _is_one_time_income_event(e)
         ]
 
         # Existing explicit future events to prevent duplicate projections
@@ -161,6 +180,17 @@ class CashFlowForecaster:
 
             # Check if user has any terminal salary event anywhere in history
             if cat == "salary":
+                # Platform payouts and app earnings are variable income, not a
+                # reliable salary stream unless the evidence explicitly describes
+                # payroll/employer salary or another stable wage source.
+                salary_descriptions = [
+                    (e.description or "").lower() for e in ev_list
+                ]
+                if not any(
+                    any(keyword in description for keyword in _STABLE_SALARY_KEYWORDS)
+                    for description in salary_descriptions
+                ):
+                    continue
                 user_salary_events = [e for e in events if e.category == "salary" and e.direction == "credit"]
                 is_salary_terminated = False
                 for se in user_salary_events:
@@ -191,12 +221,8 @@ class CashFlowForecaster:
 
             # Filter credit (income) events strictly to prevent over-projecting one-time bonuses
             if dirn == "credit":
-                ONE_TIME_INCOME_KEYWORDS = {
-                    "arrears", "bonus", "commission", "promotion", "prorated",
-                    "seasonal", "peak-season", "one-time", "reimbursement", "severance",
-                }
                 desc_lower = (last_ev.description or "").lower()
-                if any(kw in desc_lower for kw in ONE_TIME_INCOME_KEYWORDS):
+                if _is_one_time_income_event(last_ev):
                     continue
 
                 # Require at least 1 occurrence for salary, 2 for general credit
@@ -482,4 +508,3 @@ class CashFlowForecaster:
             current_balance = ending_bal
 
         return is_safe, min_balance_reached, timeline
-

@@ -26,17 +26,17 @@
 | Image extraction calls | 16 |
 | Image facts extracted | 16 |
 | Message interpretation calls | 215 |
-| Message facts extracted | 90 |
+| Message facts extracted | 95 |
 | Retries | 0 |
 | Cache hits | 0 |
 
 ## Runtime
 
-- **Sample evaluation runtime:** 2.14s
+- **Sample evaluation runtime:** 2.31s
 - **Forecast horizon:** 90 days per request
 
 ## Per-Request Summary
 
-1. **Evidence Parsing:** 16 image facts + 90 message facts parsed deterministically.
+1. **Evidence Parsing:** 16 image facts + 95 message facts parsed deterministically.
 2. **Financial State:** 90-day daily balance simulation with event deduplication, recurrence detection, and foreign currency conversion.
 3. **Safety Guarantee:** 100% deterministic decision logic — zero hallucination risk.

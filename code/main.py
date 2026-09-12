@@ -126,7 +126,7 @@ def main():
     else:
         print("   [OK] All 250 output records passed schema & invariant validation!")
 
-    print("5. Writing predictions to dataset/output.csv...")
+    print(f"5. Writing predictions to {OUTPUT_CSV}...")
     writer.write_output(output_records, OUTPUT_CSV)
     print(f"   [SUCCESS] Successfully written {len(output_records)} rows to {OUTPUT_CSV}!")
 

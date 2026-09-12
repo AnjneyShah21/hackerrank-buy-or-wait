@@ -217,6 +217,92 @@ class TestGeneralizedFixes(unittest.TestCase):
         )
         self.assertEqual(len(projected), 0, "Terminated salary stream must not generate projected events")
 
+    def test_salary_recurrence_ignores_one_time_tail(self):
+        """A one-time arrears credit after regular salary must not suppress salary projection."""
+        events = [
+            FinancialEvent(
+                event_id="e_sal1", user_id="u_salary", event_type="income",
+                description="Payroll credit", category="salary", direction="credit",
+                amount=4000.0, currency="USD", event_date="2026-01-15",
+                settlement_date="2026-01-15", status="settled",
+            ),
+            FinancialEvent(
+                event_id="e_sal2", user_id="u_salary", event_type="income",
+                description="Payroll credit", category="salary", direction="credit",
+                amount=4000.0, currency="USD", event_date="2026-02-15",
+                settlement_date="2026-02-15", status="settled",
+            ),
+            FinancialEvent(
+                event_id="e_bonus", user_id="u_salary", event_type="income",
+                description="Promotion arrears payment", category="salary", direction="credit",
+                amount=1500.0, currency="USD", event_date="2026-02-20",
+                settlement_date="2026-02-20", status="settled",
+            ),
+        ]
+        projected = self.forecaster._project_recurring_events(
+            events,
+            start_dt=datetime(2026, 2, 21).date(),
+            end_dt=datetime(2026, 5, 1).date(),
+        )
+        dates = {event.event_date for event in projected}
+        self.assertIn("2026-03-15", dates)
+        self.assertIn("2026-04-15", dates)
+
+    def test_variable_platform_payouts_are_not_projected_as_salary(self):
+        """Variable gig payouts must not create an unsupported future salary stream."""
+        events = [
+            FinancialEvent(
+                event_id="gig1", user_id="u_gig", event_type="income",
+                description="Delivery platform payout", category="salary", direction="credit",
+                amount=4000.0, currency="USD", event_date="2026-01-08",
+                settlement_date="2026-01-08", status="settled",
+            ),
+            FinancialEvent(
+                event_id="gig2", user_id="u_gig", event_type="income",
+                description="Weekly app earnings", category="salary", direction="credit",
+                amount=5000.0, currency="USD", event_date="2026-01-15",
+                settlement_date="2026-01-15", status="settled",
+            ),
+        ]
+        projected = self.forecaster._project_recurring_events(
+            events,
+            start_dt=datetime(2026, 1, 16).date(),
+            end_dt=datetime(2026, 3, 1).date(),
+        )
+        self.assertFalse(any(event.category == "salary" for event in projected))
+
+    def test_earliest_date_is_chronological_not_payday_first(self):
+        """An earlier safe non-payday must beat a later inferred payday."""
+        profile = UserProfile(
+            user_id="u_date", home_currency="USD", current_available_balance=0.0,
+            minimum_balance_to_keep=0.0,
+            payment_methods_user_will_consider={"full_payment"},
+        )
+        events = [
+            FinancialEvent(
+                event_id="hist_salary", user_id="u_date", event_type="income",
+                description="Salary", category="salary", direction="credit",
+                amount=100.0, currency="USD", event_date="2025-12-15",
+                settlement_date="2025-12-15", status="settled",
+            ),
+            FinancialEvent(
+                event_id="confirmed_credit", user_id="u_date", event_type="income",
+                description="Confirmed reimbursement", category="other", direction="credit",
+                amount=100.0, currency="USD", event_date="2026-01-10",
+                settlement_date="2026-01-10", status="scheduled",
+            ),
+        ]
+        request = FinancialRequest(
+            request_id="r_date", user_id="u_date", request_date="2026-01-01",
+            request_type="purchase", requested_amount=50.0,
+            desired_completion_date="2026-02-01", allows_partial_payment=False,
+            request_text="Purchase",
+        )
+        earliest = self.financial_engine.compute_earliest_date_for_full_payment(
+            profile, events, request
+        )
+        self.assertEqual(earliest, "2026-01-10")
+
     def test_image_extraction_ground_truth(self):
         """Test that ImageExtractor returns exact verified image values for image_01 (4,365,000 IDR)."""
         from code.image_extractor import ImageExtractor
@@ -237,4 +323,3 @@ class TestGeneralizedFixes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
