@@ -151,8 +151,18 @@ class CashFlowForecaster:
             last_amt = amounts[-1]
             avg_amt = sum(amounts) / len(amounts)
 
-            # Check if salary/income stream is terminated via description
+            # Check if user has any terminal salary event anywhere in history
             if cat == "salary":
+                user_salary_events = [e for e in events if e.category == "salary" and e.direction == "credit"]
+                is_salary_terminated = False
+                for se in user_salary_events:
+                    desc_lower = (se.description or "").lower()
+                    if any(kw in desc_lower for kw in TERMINAL_SALARY_KEYWORDS):
+                        is_salary_terminated = True
+                        break
+                if is_salary_terminated:
+                    continue
+
                 desc_lower = (last_ev.description or "").lower()
                 if any(kw in desc_lower for kw in TERMINAL_SALARY_KEYWORDS):
                     continue
@@ -186,13 +196,12 @@ class CashFlowForecaster:
                 if len(ev_list) < min_req_count:
                     continue
 
-            # Only project debit streams that are essential or fixed flexibility
-            ESSENTIAL_CATEGORIES = {
-                "rent", "housing", "utilities", "debt_repayment", "groceries",
-                "transport", "insurance", "education", "subscription",
-                "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
+            # Do NOT project discretionary variable spending as mandatory cash drains
+            DISCRETIONARY_CATEGORIES = {
+                "dining", "shopping", "entertainment", "hobbies",
+                "travel", "leisure", "gifts", "electronics", "clothing"
             }
-            if dirn == "debit" and last_ev.flexibility != "fixed" and cat not in ESSENTIAL_CATEGORIES:
+            if dirn == "debit" and cat in DISCRETIONARY_CATEGORIES:
                 continue
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
             avg_interval = sum(intervals) / len(intervals) if intervals else None
@@ -237,8 +246,8 @@ class CashFlowForecaster:
                             projected.append(proj_ev)
                     next_dt += timedelta(days=step_days)
 
-            # Monthly fixed projection (interval 25 to 35 days, or salary/fixed categories)
-            elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
+            # Monthly fixed projection (interval 25 to 35 days, or salary/fixed categories with >= 1 occurrence)
+            elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 1 and cat in fixed_monthly_categories):
                 # Check for date shift in user facts
                 base_dt = last_dt
                 if cat == "salary" and user_facts:
@@ -321,6 +330,13 @@ class CashFlowForecaster:
                 or ev.direction == "non_cash"
             ):
                 continue
+
+            # 2. Do not count future non-settled/one-time credit events (bonuses, arrears, refunds)
+            if ev.direction == "credit" and ev.event_date and ev.event_date > start_date_str:
+                desc_lower = (ev.description or "").lower()
+                ONE_TIME_CREDIT = {"bonus", "arrears", "commission", "refund", "lottery", "investment_gain", "promotion"}
+                if any(kw in desc_lower for kw in ONE_TIME_CREDIT):
+                    continue
 
             # Amount safety check
             if ev.amount is None or ev.amount <= 0:

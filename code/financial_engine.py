@@ -96,7 +96,46 @@ class FinancialEngine:
         start_dt = _parse_date(request.request_date)
         req_amount = request.requested_amount
 
+        # Collect salary/income paydays for prioritized candidate date testing
+        payday_offsets = set()
+        payday_offsets.add(0)
+
+        sal_days = set()
+        for ev in events:
+            if ev.category == "salary" or ev.direction == "credit":
+                d = _parse_date(ev.event_date)
+                if d:
+                    sal_days.add(d.day)
+
+        if not sal_days:
+            sal_days = {15}
+
+        for offset in range(1, FORECAST_DAYS + 1):
+            dt = start_dt + timedelta(days=offset)
+            if dt.day in sal_days:
+                payday_offsets.add(offset)
+
+        # 1. Test payday candidate dates in chronological order first
+        ordered_offsets = sorted(list(payday_offsets))
+        for day_offset in ordered_offsets:
+            cand_dt = start_dt + timedelta(days=day_offset)
+            cand_date_str = cand_dt.strftime("%Y-%m-%d")
+
+            forecast_horizon = max(FORECAST_DAYS, day_offset + FORECAST_DAYS)
+            is_safe, _, _ = self.forecaster.simulate_90_days(
+                profile=profile,
+                events=events,
+                start_date_str=request.request_date,
+                forecast_days=forecast_horizon,
+                proposed_payments=[(cand_date_str, req_amount)],
+            )
+            if is_safe:
+                return cand_date_str
+
+        # 2. Fallback: test remaining calendar days
         for day_offset in range(FORECAST_DAYS + 1):
+            if day_offset in payday_offsets:
+                continue
             cand_dt = start_dt + timedelta(days=day_offset)
             cand_date_str = cand_dt.strftime("%Y-%m-%d")
 
