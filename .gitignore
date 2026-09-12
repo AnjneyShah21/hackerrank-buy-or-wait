@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment and secrets
+.env
+.env.local
+
+# Agent log file (strictly ignored per AGENTS.md §2)
+log.txt
+
+# OS metadata
+.DS_Store
+Thumbs.db
