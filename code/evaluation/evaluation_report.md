@@ -4,7 +4,7 @@
 
 - **Sample requests evaluated:** 25
 - **Overall exact-match rate:** 12.0%
-- **Runtime:** 1.56s
+- **Runtime:** 1.51s
 - **Estimated cost:** $0.0000
 
 ## Field-Level Accuracy
@@ -265,5 +265,5 @@
 | Retries | 0 |
 | Cache hits | 0 |
 | Estimated cost (USD) | $0.0000 |
-| Runtime (s) | 1.56 |
+| Runtime (s) | 1.51 |
 

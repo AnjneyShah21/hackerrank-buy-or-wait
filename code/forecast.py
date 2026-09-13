@@ -144,7 +144,8 @@ class CashFlowForecaster:
         ESSENTIAL_FIXED_CATEGORIES = {
             "rent", "housing", "utilities", "debt_repayment", "groceries",
             "transport", "insurance", "education", "healthcare", "medical", "childcare", "subscription",
-            "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
+            "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership",
+            "dining", "shopping", "entertainment"
         }
 
         # Group past events by (category, direction, description)

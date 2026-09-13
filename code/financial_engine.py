@@ -34,12 +34,30 @@ class FinancialEngine:
     ) -> float:
         """
         Calculates the maximum amount safe to pay on request_date
-        BEFORE optional spending changes, without violating the 90-day minimum balance.
+        BEFORE optional spending changes, without violating minimum balance prior to next payday.
         Guarantees: 0 <= amount_safe_to_pay <= requested_amount.
         """
         req_amount = request.requested_amount
         if req_amount <= 0:
             return 0.0
+
+        start_dt = _parse_date(request.request_date)
+        salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
+        payday_day = 15
+        if salaries:
+            last_sd = _parse_date(salaries[-1].event_date)
+            if last_sd:
+                payday_day = last_sd.day
+
+        next_payday = None
+        for d in range(1, 45):
+            chk = start_dt + timedelta(days=d)
+            if chk.day == payday_day:
+                next_payday = chk
+                break
+
+        days_to_payday = (next_payday - start_dt).days if next_payday else 30
+        window_days = max(1, days_to_payday)
 
         # Check if paying full requested_amount is safe today
         is_safe_full, _, _ = self.forecaster.simulate_90_days(
@@ -47,6 +65,7 @@ class FinancialEngine:
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[(request.request_date, req_amount)],
+            forecast_days=window_days,
         )
         if is_safe_full:
             return req_amount
@@ -57,6 +76,7 @@ class FinancialEngine:
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[],
+            forecast_days=window_days,
         )
         if not is_safe_zero:
             return 0.0
@@ -73,6 +93,7 @@ class FinancialEngine:
                 events=events,
                 start_date_str=request.request_date,
                 proposed_payments=[(request.request_date, mid)],
+                forecast_days=window_days,
             )
             if safe:
                 best_safe = mid
