@@ -280,24 +280,12 @@ class CashFlowForecaster:
             elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
                 # Check for date shift in user facts
                 base_dt = last_dt
-                if cat == "salary":
-                    has_confirmed_date_shift = False
-                    if user_facts:
-                        date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
-                        if date_shifts:
-                            shifted_dt = _parse_date(date_shifts[0].extracted_date)
-                            if shifted_dt and shifted_dt > start_dt:
-                                base_dt = _add_months(shifted_dt, -1)
-                                has_confirmed_date_shift = True
-                    if not has_confirmed_date_shift:
-                        day_counts = Counter(dt.day for dt in dates)
-                        modal_count = max(day_counts.values())
-                        if modal_count >= 2:
-                            modal_days = {
-                                day for day, count in day_counts.items()
-                                if count == modal_count
-                            }
-                            base_dt = max(dt for dt in dates if dt.day in modal_days)
+                if cat == "salary" and user_facts:
+                    date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
+                    if date_shifts:
+                        shifted_dt = _parse_date(date_shifts[0].extracted_date)
+                        if shifted_dt and shifted_dt > start_dt:
+                            base_dt = _add_months(shifted_dt, -1)
 
                 curr_m = 1
                 while True:

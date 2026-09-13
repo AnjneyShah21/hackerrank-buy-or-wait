@@ -5,22 +5,11 @@ payment planning, constraint ranking, invariant validation, and output generatio
 """
 
 import sys
-import types
 from pathlib import Path
 
-# Add project root and current dir to sys.path and register 'code' package alias
-_curr_dir = Path(__file__).resolve().parent
-_parent_dir = _curr_dir.parent
-
-if "code" not in sys.modules:
-    _code_pkg = types.ModuleType("code")
-    _code_pkg.__path__ = [str(_curr_dir)]
-    sys.modules["code"] = _code_pkg
-
-if str(_curr_dir) not in sys.path:
-    sys.path.insert(0, str(_curr_dir))
-if str(_parent_dir) not in sys.path:
-    sys.path.insert(0, str(_parent_dir))
+# Add project root to sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from code.config import OUTPUT_CSV
 from code.currency import CurrencyConverter

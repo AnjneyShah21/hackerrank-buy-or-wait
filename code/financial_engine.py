@@ -67,7 +67,6 @@ class FinancialEngine:
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[(request.request_date, req_amount)],
-            forecast_days=window_days,
         )
         if is_safe_full:
             return req_amount
@@ -78,7 +77,6 @@ class FinancialEngine:
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[],
-            forecast_days=window_days,
         )
         if not is_safe_zero:
             return 0.0
@@ -95,7 +93,6 @@ class FinancialEngine:
                 events=events,
                 start_date_str=request.request_date,
                 proposed_payments=[(request.request_date, mid)],
-                forecast_days=window_days,
             )
             if safe:
                 best_safe = mid
@@ -123,29 +120,27 @@ class FinancialEngine:
         if amt_safe >= req_amount:
             return request.request_date
 
-        # Search upcoming salary / income paydays strictly
+        # Search upcoming salary / income and explicit credit dates first
+        credits = [e for e in events if e.direction == "credit" and e.status in ("settled", "scheduled")]
+        credits.sort(key=lambda x: _parse_date(x.event_date) or start_dt)
         paydays = []
+        for c in credits:
+            cd = _parse_date(c.event_date)
+            if cd and cd > start_dt and cd not in paydays:
+                paydays.append(cd)
+
         salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
         if salaries:
             last_sd = _parse_date(salaries[-1].event_date)
             if last_sd:
-                curr = start_dt
-                for _ in range(6):
+                curr = last_sd
+                for _ in range(4):
                     m = curr.month % 12 + 1
                     y = curr.year + (1 if m == 1 else 0)
                     d = min(last_sd.day, 28)
                     curr = datetime(y, m, d).date()
                     if curr > start_dt and curr not in paydays:
                         paydays.append(curr)
-
-        if not paydays:
-            curr = start_dt
-            for _ in range(6):
-                m = curr.month % 12 + 1
-                y = curr.year + (1 if m == 1 else 0)
-                curr = datetime(y, m, 15).date()
-                if curr > start_dt and curr not in paydays:
-                    paydays.append(curr)
 
         paydays.sort()
 
@@ -161,6 +156,22 @@ class FinancialEngine:
             )
             if is_safe:
                 return p_str
+
+        # Fallback daily search
+        for day_offset in range(1, FORECAST_DAYS + 1):
+            cand_dt = start_dt + timedelta(days=day_offset)
+            cand_date_str = cand_dt.strftime("%Y-%m-%d")
+
+            forecast_horizon = max(FORECAST_DAYS, day_offset + FORECAST_DAYS)
+            is_safe, _, _ = self.forecaster.simulate_90_days(
+                profile=profile,
+                events=events,
+                start_date_str=request.request_date,
+                forecast_days=forecast_horizon,
+                proposed_payments=[(cand_date_str, req_amount)],
+            )
+            if is_safe:
+                return cand_date_str
 
         return ""
 
