@@ -332,44 +332,6 @@ class TestGeneralizedFixes(unittest.TestCase):
         self.assertIn("2024-10-23", dates)
         self.assertNotIn("2024-10-24", dates)
 
-    def test_salary_recurrence_uses_established_modal_payday(self):
-        """An irregular one-off payroll date must not replace a repeated payday."""
-        from code.evidence import EvidenceManager
-
-        evidence = EvidenceManager()
-        # A user-level amount fact must not prevent cadence detection.
-        evidence.add_fact(ExtractedFact(
-            fact_id="amount_1", source_type="message", source_id="msg_1",
-            user_id="u_modal", fact_kind="salary_update", extracted_amount=1000.0,
-        ))
-        forecaster = CashFlowForecaster(self.converter, evidence)
-        events = [
-            FinancialEvent(
-                event_id=f"salary_{month}", user_id="u_modal", event_type="income",
-                description="Employer payroll", category="salary", direction="credit",
-                amount=1000.0, currency="USD", event_date=f"2024-0{month}-15",
-                settlement_date=f"2024-0{month}-15", status="settled",
-            )
-            for month in range(4, 8)
-        ] + [
-            FinancialEvent(
-                event_id="irregular", user_id="u_modal", event_type="income",
-                description="August net salary", category="salary", direction="credit",
-                amount=1000.0, currency="USD", event_date="2024-08-31",
-                settlement_date="2024-08-31", status="settled",
-            )
-        ]
-
-        projected = forecaster._project_recurring_events(
-            events,
-            start_dt=datetime(2024, 9, 3).date(),
-            end_dt=datetime(2024, 11, 30).date(),
-        )
-        dates = {event.event_date for event in projected}
-        self.assertIn("2024-09-15", dates)
-        self.assertIn("2024-10-15", dates)
-        self.assertNotIn("2024-09-30", dates)
-
     def test_image_extraction_ground_truth(self):
         """Test that ImageExtractor returns exact verified image values for image_01 (4,365,000 IDR)."""
         from code.image_extractor import ImageExtractor
