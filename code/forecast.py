@@ -139,11 +139,11 @@ class CashFlowForecaster:
         fixed_monthly_categories = {
             "rent", "housing", "utilities", "debt_repayment", "music_subscription",
             "cloud_storage", "streaming", "gym", "delivery_membership", "insurance",
-            "education", "salary"
+            "education", "healthcare", "medical", "childcare", "salary"
         }
         ESSENTIAL_FIXED_CATEGORIES = {
             "rent", "housing", "utilities", "debt_repayment", "groceries",
-            "transport", "insurance", "education", "subscription",
+            "transport", "insurance", "education", "healthcare", "medical", "childcare", "subscription",
             "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
         }
 

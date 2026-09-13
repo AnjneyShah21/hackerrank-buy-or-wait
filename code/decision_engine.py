@@ -87,7 +87,7 @@ class DecisionEngine:
             effective_safe_amount = best_plan.payments[0][1]
         effective_safe_amount = max(0.0, min(effective_safe_amount, req_amt))
 
-        # ── Fallback when no safe plan is available ─────────────────────────
+        # ── Fallback when no safe plan is available today ────────────────────
         if best_plan is None or best_plan.method == "not_recommended":
             if earliest_date_for_full_payment:
                 explanation = (
@@ -95,21 +95,32 @@ class DecisionEngine:
                     f"Only {curr} {amount_safe_to_pay:,.2f} is safe on {req_date} without dropping below your required {curr} {min_bal:,.2f} minimum balance. "
                     f"Wait until {earliest_date_for_full_payment} when confirmed income settles."
                 )
+                from code.payment_planner import _format_amount
+                res = DecisionResult(
+                    request_id=request.request_id,
+                    amount_safe_to_pay=round(amount_safe_to_pay, 2),
+                    affordability_status="affordable_later",
+                    recommended_payment_method="wait",
+                    payment_plan=f"{earliest_date_for_full_payment}:{_format_amount(req_amt)}",
+                    earliest_date_for_full_payment=earliest_date_for_full_payment,
+                    spending_changes_needed="none",
+                    decision_explanation=explanation,
+                )
             else:
                 explanation = (
                     f"Do not proceed with the {curr} {req_amt:,.2f} request. "
                     f"Paying this amount cannot be completed safely within 90 days while maintaining your required {curr} {min_bal:,.2f} minimum balance."
                 )
-            res = DecisionResult(
-                request_id=request.request_id,
-                amount_safe_to_pay=round(amount_safe_to_pay, 2),
-                affordability_status="not_affordable",
-                recommended_payment_method="not_recommended",
-                payment_plan="none",
-                earliest_date_for_full_payment=earliest_date_for_full_payment,
-                spending_changes_needed="none",
-                decision_explanation=explanation,
-            )
+                res = DecisionResult(
+                    request_id=request.request_id,
+                    amount_safe_to_pay=round(amount_safe_to_pay, 2),
+                    affordability_status="not_affordable",
+                    recommended_payment_method="not_recommended",
+                    payment_plan="none",
+                    earliest_date_for_full_payment="",
+                    spending_changes_needed="none",
+                    decision_explanation=explanation,
+                )
             self.assert_explanation_consistency(res)
             return res
 

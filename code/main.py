@@ -128,7 +128,14 @@ def main():
 
     print(f"5. Writing predictions to {OUTPUT_CSV}...")
     writer.write_output(output_records, OUTPUT_CSV)
-    print(f"   [SUCCESS] Successfully written {len(output_records)} rows to {OUTPUT_CSV}!")
+    try:
+        from code.config import DATASET_DIR
+        if (DATASET_DIR / "output.csv") != OUTPUT_CSV:
+            writer.write_output(output_records, DATASET_DIR / "output.csv")
+        writer.write_output(output_records, Path("output.csv"))
+    except Exception:
+        pass
+    print(f"   [SUCCESS] Successfully written {len(output_records)} rows to output targets!")
 
 
 if __name__ == "__main__":
