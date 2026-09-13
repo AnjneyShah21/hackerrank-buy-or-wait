@@ -81,11 +81,8 @@ class DecisionEngine:
         req_amt = request.requested_amount
         req_date = request.request_date
 
-        # For installment plans, amount_safe_to_pay on request_date is the first installment amount
-        effective_safe_amount = amount_safe_to_pay
-        if best_plan and best_plan.method == "installments" and best_plan.payments:
-            effective_safe_amount = best_plan.payments[0][1]
-        effective_safe_amount = max(0.0, min(effective_safe_amount, req_amt))
+        # Preserve amount_safe_to_pay as the maximum safe liquidity on request_date
+        effective_safe_amount = max(0.0, min(amount_safe_to_pay, req_amt))
 
         # ── Fallback when no safe plan is available today ────────────────────
         if best_plan is None or best_plan.method == "not_recommended":
