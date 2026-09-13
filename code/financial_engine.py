@@ -41,26 +41,6 @@ class FinancialEngine:
         if req_amount <= 0:
             return 0.0
 
-        start_dt = _parse_date(request.request_date)
-        
-        # Determine next salary or income payday to frame the pre-payday liquidity window
-        salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
-        payday_day = 15
-        if salaries:
-            last_sd = _parse_date(salaries[-1].event_date)
-            if last_sd:
-                payday_day = last_sd.day
-
-        next_payday = None
-        for d in range(1, 45):
-            chk = start_dt + timedelta(days=d)
-            if chk.day == payday_day:
-                next_payday = chk
-                break
-        
-        days_to_payday = (next_payday - start_dt).days if next_payday else 30
-        window_days = max(1, days_to_payday)
-
         # Check if paying full requested_amount is safe today
         is_safe_full, _, _ = self.forecaster.simulate_90_days(
             profile=profile,
@@ -116,49 +96,10 @@ class FinancialEngine:
         start_dt = _parse_date(request.request_date)
         req_amount = request.requested_amount
 
-        amt_safe = self.compute_amount_safe_to_pay(profile, events, request)
-        if amt_safe >= req_amount:
-            return request.request_date
-
-        # Search upcoming salary / income and explicit credit dates first
-        credits = [e for e in events if e.direction == "credit" and e.status in ("settled", "scheduled")]
-        credits.sort(key=lambda x: _parse_date(x.event_date) or start_dt)
-        paydays = []
-        for c in credits:
-            cd = _parse_date(c.event_date)
-            if cd and cd > start_dt and cd not in paydays:
-                paydays.append(cd)
-
-        salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
-        if salaries:
-            last_sd = _parse_date(salaries[-1].event_date)
-            if last_sd:
-                curr = last_sd
-                for _ in range(4):
-                    m = curr.month % 12 + 1
-                    y = curr.year + (1 if m == 1 else 0)
-                    d = min(last_sd.day, 28)
-                    curr = datetime(y, m, d).date()
-                    if curr > start_dt and curr not in paydays:
-                        paydays.append(curr)
-
-        paydays.sort()
-
-        for pd in paydays:
-            p_str = pd.strftime("%Y-%m-%d")
-            horizon = max(FORECAST_DAYS, (pd - start_dt).days + FORECAST_DAYS)
-            is_safe, _, _ = self.forecaster.simulate_90_days(
-                profile=profile,
-                events=events,
-                start_date_str=request.request_date,
-                forecast_days=horizon,
-                proposed_payments=[(p_str, req_amount)],
-            )
-            if is_safe:
-                return p_str
-
-        # Fallback daily search
-        for day_offset in range(1, FORECAST_DAYS + 1):
+        # Earliest means the first safe calendar date, not the first inferred payday.
+        # Testing payday candidates first can incorrectly skip an earlier safe date
+        # between paydays (for example, after a confirmed non-salary credit).
+        for day_offset in range(FORECAST_DAYS + 1):
             cand_dt = start_dt + timedelta(days=day_offset)
             cand_date_str = cand_dt.strftime("%Y-%m-%d")
 
