@@ -121,29 +121,28 @@ class FinancialEngine:
         if amt_safe >= req_amount:
             return request.request_date
 
-        # Search upcoming salary / income paydays first
+        # Search upcoming salary / income paydays and 15th of the month
         paydays = []
         salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
+        target_days = {15}
         if salaries:
             last_sd = _parse_date(salaries[-1].event_date)
             if last_sd:
-                curr = start_dt
-                for _ in range(6):
-                    m = curr.month % 12 + 1
-                    y = curr.year + (1 if m == 1 else 0)
-                    d = min(last_sd.day, 28)
-                    curr = datetime(y, m, d).date()
-                    if curr > start_dt and curr not in paydays:
-                        paydays.append(curr)
+                target_days.add(min(last_sd.day, 28))
 
-        if not paydays:
-            curr = start_dt
-            for _ in range(6):
-                m = curr.month % 12 + 1
-                y = curr.year + (1 if m == 1 else 0)
-                curr = datetime(y, m, 15).date()
-                if curr > start_dt and curr not in paydays:
-                    paydays.append(curr)
+        curr_y = start_dt.year
+        curr_m = start_dt.month
+
+        for m_offset in range(0, 7):
+            m = (curr_m - 1 + m_offset) % 12 + 1
+            y = curr_y + (curr_m - 1 + m_offset) // 12
+            for d in sorted(target_days):
+                try:
+                    cand_dt = datetime(y, m, d).date()
+                    if cand_dt > start_dt and cand_dt not in paydays:
+                        paydays.append(cand_dt)
+                except ValueError:
+                    continue
 
         paydays.sort()
 

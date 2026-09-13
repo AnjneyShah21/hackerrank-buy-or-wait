@@ -13,3 +13,7 @@ log.txt
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Scratch work
+scratch/
+code 1.zip
