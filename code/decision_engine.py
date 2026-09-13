@@ -89,7 +89,10 @@ class DecisionEngine:
 
         # ── Fallback when no safe plan is available today ────────────────────
         if best_plan is None or best_plan.method == "not_recommended":
-            if earliest_date_for_full_payment:
+            dcd = getattr(request, "desired_completion_date", "") or ""
+            is_after_dcd = bool(earliest_date_for_full_payment and dcd and earliest_date_for_full_payment > dcd)
+
+            if earliest_date_for_full_payment and not is_after_dcd:
                 explanation = (
                     f"Do not proceed with paying {curr} {req_amt:,.2f} today. "
                     f"Only {curr} {amount_safe_to_pay:,.2f} is safe on {req_date} without dropping below your required {curr} {min_bal:,.2f} minimum balance. "
@@ -109,7 +112,7 @@ class DecisionEngine:
             else:
                 explanation = (
                     f"Do not proceed with the {curr} {req_amt:,.2f} request. "
-                    f"Paying this amount cannot be completed safely within 90 days while maintaining your required {curr} {min_bal:,.2f} minimum balance."
+                    f"Paying this amount cannot be completed safely by your deadline ({dcd if dcd else 'forecast window'}) while maintaining your required {curr} {min_bal:,.2f} minimum balance."
                 )
                 res = DecisionResult(
                     request_id=request.request_id,

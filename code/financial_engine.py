@@ -59,24 +59,24 @@ class FinancialEngine:
         days_to_payday = (next_payday - start_dt).days if next_payday else 30
         window_days = max(1, days_to_payday)
 
-        # Check if paying full requested_amount is safe today
+        # Check if paying full requested_amount is safe today across full 90-day horizon
         is_safe_full, _, _ = self.forecaster.simulate_90_days(
             profile=profile,
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[(request.request_date, req_amount)],
-            forecast_days=window_days,
+            forecast_days=FORECAST_DAYS,
         )
         if is_safe_full:
             return req_amount
 
-        # Check if paying 0 is safe today
+        # Check if paying 0 is safe today across full 90-day horizon
         is_safe_zero, _, _ = self.forecaster.simulate_90_days(
             profile=profile,
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[],
-            forecast_days=window_days,
+            forecast_days=FORECAST_DAYS,
         )
         if not is_safe_zero:
             return 0.0
@@ -93,7 +93,7 @@ class FinancialEngine:
                 events=events,
                 start_date_str=request.request_date,
                 proposed_payments=[(request.request_date, mid)],
-                forecast_days=window_days,
+                forecast_days=FORECAST_DAYS,
             )
             if safe:
                 best_safe = mid

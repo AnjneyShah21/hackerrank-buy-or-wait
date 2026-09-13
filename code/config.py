@@ -8,7 +8,26 @@ from pathlib import Path
 # Paths configuration
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CODE_DIR = Path(__file__).resolve().parent
-DATASET_DIR = PROJECT_ROOT / "dataset"
+
+def _find_dataset_dir() -> Path:
+    env_ds = os.getenv("DATASET_DIR") or os.getenv("DATASET_PATH")
+    if env_ds:
+        p = Path(env_ds)
+        if p.exists() and p.is_dir():
+            return p
+    candidates = [
+        Path.cwd() / "dataset",
+        Path(__file__).resolve().parent.parent / "dataset",
+        Path(__file__).resolve().parent / "dataset",
+        Path("/dataset"),
+        Path("./dataset"),
+    ]
+    for c in candidates:
+        if c.exists() and (c / "requests.csv").exists():
+            return c
+    return Path(__file__).resolve().parent.parent / "dataset"
+
+DATASET_DIR = _find_dataset_dir()
 MEDIA_DIR = DATASET_DIR / "media"
 IMAGES_DIR = MEDIA_DIR / "images"
 PROMPTS_DIR = CODE_DIR / "prompts"
