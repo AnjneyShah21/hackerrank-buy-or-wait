@@ -3,11 +3,35 @@ Configuration settings and global constants for the Buy or Wait? system.
 """
 
 import os
+import sys
+import types
 from pathlib import Path
 
-# Paths configuration
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CODE_DIR = Path(__file__).resolve().parent
+# Dynamic package registration & self-healing paths setup
+_curr_dir = Path(__file__).resolve().parent
+_parent_dir = _curr_dir.parent
+
+if "code" not in sys.modules:
+    _code_pkg = types.ModuleType("code")
+    _code_pkg.__path__ = [str(_curr_dir)]
+    sys.modules["code"] = _code_pkg
+
+if str(_curr_dir) not in sys.path:
+    sys.path.insert(0, str(_curr_dir))
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
+
+# Self-healing PROJECT_ROOT & DATASET_DIR location discovery
+if (_curr_dir / "dataset").exists():
+    PROJECT_ROOT = _curr_dir
+elif (_parent_dir / "dataset").exists():
+    PROJECT_ROOT = _parent_dir
+elif (_parent_dir.parent / "dataset").exists():
+    PROJECT_ROOT = _parent_dir.parent
+else:
+    PROJECT_ROOT = _parent_dir if _curr_dir.name == "code" else _curr_dir
+
+CODE_DIR = _curr_dir
 DATASET_DIR = PROJECT_ROOT / "dataset"
 MEDIA_DIR = DATASET_DIR / "media"
 IMAGES_DIR = MEDIA_DIR / "images"

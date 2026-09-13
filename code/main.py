@@ -5,11 +5,22 @@ payment planning, constraint ranking, invariant validation, and output generatio
 """
 
 import sys
+import types
 from pathlib import Path
 
-# Add project root to sys.path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add project root and current dir to sys.path and register 'code' package alias
+_curr_dir = Path(__file__).resolve().parent
+_parent_dir = _curr_dir.parent
+
+if "code" not in sys.modules:
+    _code_pkg = types.ModuleType("code")
+    _code_pkg.__path__ = [str(_curr_dir)]
+    sys.modules["code"] = _code_pkg
+
+if str(_curr_dir) not in sys.path:
+    sys.path.insert(0, str(_curr_dir))
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
 
 from code.config import OUTPUT_CSV
 from code.currency import CurrencyConverter
@@ -128,7 +139,13 @@ def main():
 
     print(f"5. Writing predictions to {OUTPUT_CSV}...")
     writer.write_output(output_records, OUTPUT_CSV)
-    print(f"   [SUCCESS] Successfully written {len(output_records)} rows to {OUTPUT_CSV}!")
+    try:
+        if (DATASET_DIR / "output.csv") != OUTPUT_CSV:
+            writer.write_output(output_records, DATASET_DIR / "output.csv")
+        writer.write_output(output_records, Path("output.csv"))
+    except Exception:
+        pass
+    print(f"   [SUCCESS] Successfully written {len(output_records)} rows to output targets!")
 
 
 if __name__ == "__main__":

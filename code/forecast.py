@@ -3,6 +3,7 @@ Forecast engine for 90-day daily cash-flow simulation.
 Evaluates balance trajectory against minimum_balance_to_keep deterministically.
 """
 
+from collections import Counter
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -139,11 +140,11 @@ class CashFlowForecaster:
         fixed_monthly_categories = {
             "rent", "housing", "utilities", "debt_repayment", "music_subscription",
             "cloud_storage", "streaming", "gym", "delivery_membership", "insurance",
-            "education", "salary"
+            "education", "healthcare", "medical", "childcare", "salary"
         }
         ESSENTIAL_FIXED_CATEGORIES = {
             "rent", "housing", "utilities", "debt_repayment", "groceries",
-            "transport", "insurance", "education", "subscription",
+            "transport", "insurance", "education", "healthcare", "medical", "childcare", "subscription",
             "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
         }
 
@@ -230,12 +231,6 @@ class CashFlowForecaster:
                 if len(ev_list) < min_req_count:
                     continue
 
-            # Only project essential living expenses and contractual fixed commitments
-            ESSENTIAL_FIXED_CATEGORIES = {
-                "rent", "housing", "utilities", "debt_repayment", "groceries",
-                "transport", "insurance", "education", "subscription",
-                "cloud_storage", "gym", "streaming", "music_subscription", "delivery_membership"
-            }
             if dirn == "debit" and cat not in ESSENTIAL_FIXED_CATEGORIES:
                 continue
             intervals = [(dates[i] - dates[i-1]).days for i in range(1, len(dates))] if len(dates) >= 2 else []
@@ -285,17 +280,24 @@ class CashFlowForecaster:
             elif (avg_interval and 25 <= avg_interval <= 35) or (cat == "salary" and len(ev_list) >= 1) or (len(ev_list) >= 2 and cat in fixed_monthly_categories):
                 # Check for date shift in user facts
                 base_dt = last_dt
-                if cat == "salary" and user_facts:
-                    date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
-                    if date_shifts:
-                        shifted_dt = _parse_date(date_shifts[0].extracted_date)
-                        if shifted_dt and shifted_dt > start_dt:
-                            # Preserve the confirmed calendar day when deriving the
-                            # preceding monthly anchor.  A fixed 30-day subtraction
-                            # drifts for 31-day months (for example, a confirmed
-                            # 23rd becomes a 24th), which then shifts every
-                            # projected payday and payment decision.
-                            base_dt = _add_months(shifted_dt, -1)
+                if cat == "salary":
+                    has_confirmed_date_shift = False
+                    if user_facts:
+                        date_shifts = [f for f in user_facts if f.fact_kind == "date_shift" and f.extracted_date]
+                        if date_shifts:
+                            shifted_dt = _parse_date(date_shifts[0].extracted_date)
+                            if shifted_dt and shifted_dt > start_dt:
+                                base_dt = _add_months(shifted_dt, -1)
+                                has_confirmed_date_shift = True
+                    if not has_confirmed_date_shift:
+                        day_counts = Counter(dt.day for dt in dates)
+                        modal_count = max(day_counts.values())
+                        if modal_count >= 2:
+                            modal_days = {
+                                day for day, count in day_counts.items()
+                                if count == modal_count
+                            }
+                            base_dt = max(dt for dt in dates if dt.day in modal_days)
 
                 curr_m = 1
                 while True:

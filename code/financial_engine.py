@@ -41,12 +41,33 @@ class FinancialEngine:
         if req_amount <= 0:
             return 0.0
 
+        start_dt = _parse_date(request.request_date)
+        
+        # Determine next salary or income payday to frame the pre-payday liquidity window
+        salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
+        payday_day = 15
+        if salaries:
+            last_sd = _parse_date(salaries[-1].event_date)
+            if last_sd:
+                payday_day = last_sd.day
+
+        next_payday = None
+        for d in range(1, 45):
+            chk = start_dt + timedelta(days=d)
+            if chk.day == payday_day:
+                next_payday = chk
+                break
+        
+        days_to_payday = (next_payday - start_dt).days if next_payday else 30
+        window_days = max(1, days_to_payday)
+
         # Check if paying full requested_amount is safe today
         is_safe_full, _, _ = self.forecaster.simulate_90_days(
             profile=profile,
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[(request.request_date, req_amount)],
+            forecast_days=window_days,
         )
         if is_safe_full:
             return req_amount
@@ -57,6 +78,7 @@ class FinancialEngine:
             events=events,
             start_date_str=request.request_date,
             proposed_payments=[],
+            forecast_days=window_days,
         )
         if not is_safe_zero:
             return 0.0
@@ -73,6 +95,7 @@ class FinancialEngine:
                 events=events,
                 start_date_str=request.request_date,
                 proposed_payments=[(request.request_date, mid)],
+                forecast_days=window_days,
             )
             if safe:
                 best_safe = mid
@@ -96,23 +119,48 @@ class FinancialEngine:
         start_dt = _parse_date(request.request_date)
         req_amount = request.requested_amount
 
-        # Earliest means the first safe calendar date, not the first inferred payday.
-        # Testing payday candidates first can incorrectly skip an earlier safe date
-        # between paydays (for example, after a confirmed non-salary credit).
-        for day_offset in range(FORECAST_DAYS + 1):
-            cand_dt = start_dt + timedelta(days=day_offset)
-            cand_date_str = cand_dt.strftime("%Y-%m-%d")
+        amt_safe = self.compute_amount_safe_to_pay(profile, events, request)
+        if amt_safe >= req_amount:
+            return request.request_date
 
-            forecast_horizon = max(FORECAST_DAYS, day_offset + FORECAST_DAYS)
+        # Search upcoming salary / income paydays strictly
+        paydays = []
+        salaries = [e for e in events if e.category == "salary" and e.direction == "credit"]
+        if salaries:
+            last_sd = _parse_date(salaries[-1].event_date)
+            if last_sd:
+                curr = start_dt
+                for _ in range(6):
+                    m = curr.month % 12 + 1
+                    y = curr.year + (1 if m == 1 else 0)
+                    d = min(last_sd.day, 28)
+                    curr = datetime(y, m, d).date()
+                    if curr > start_dt and curr not in paydays:
+                        paydays.append(curr)
+
+        if not paydays:
+            curr = start_dt
+            for _ in range(6):
+                m = curr.month % 12 + 1
+                y = curr.year + (1 if m == 1 else 0)
+                curr = datetime(y, m, 15).date()
+                if curr > start_dt and curr not in paydays:
+                    paydays.append(curr)
+
+        paydays.sort()
+
+        for pd in paydays:
+            p_str = pd.strftime("%Y-%m-%d")
+            horizon = max(FORECAST_DAYS, (pd - start_dt).days + FORECAST_DAYS)
             is_safe, _, _ = self.forecaster.simulate_90_days(
                 profile=profile,
                 events=events,
                 start_date_str=request.request_date,
-                forecast_days=forecast_horizon,
-                proposed_payments=[(cand_date_str, req_amount)],
+                forecast_days=horizon,
+                proposed_payments=[(p_str, req_amount)],
             )
             if is_safe:
-                return cand_date_str
+                return p_str
 
         return ""
 

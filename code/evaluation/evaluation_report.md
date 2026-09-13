@@ -4,18 +4,18 @@
 
 - **Sample requests evaluated:** 25
 - **Overall exact-match rate:** 12.0%
-- **Runtime:** 2.65s
+- **Runtime:** 0.61s
 - **Estimated cost:** $0.0000
 
 ## Field-Level Accuracy
 
 | Field | Accuracy |
 |:---|---:|
-| affordability_status | 76.0% |
-| recommended_payment_method | 84.0% |
+| affordability_status | 56.0% |
+| recommended_payment_method | 64.0% |
 | amount_safe_to_pay (±1%) | 12.0% |
-| payment_plan | 76.0% |
-| earliest_date_for_full_payment | 64.0% |
+| payment_plan | 52.0% |
+| earliest_date_for_full_payment | 32.0% |
 | spending_changes_needed | 84.0% |
 
 ## Per-Request Comparison
@@ -26,27 +26,27 @@
 | request_02 | FAIL | OK | OK | FAIL | OK | OK | OK |
 | request_03 | FAIL | OK | OK | FAIL | FAIL | FAIL | OK |
 | request_04 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
-| request_05 | FAIL | OK | OK | FAIL | OK | OK | OK |
+| request_05 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
 | request_06 | FAIL | FAIL | OK | FAIL | FAIL | OK | FAIL |
-| request_07 | FAIL | OK | OK | FAIL | OK | OK | OK |
-| request_08 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
+| request_07 | FAIL | OK | OK | FAIL | FAIL | OK | OK |
+| request_08 | FAIL | OK | OK | FAIL | FAIL | FAIL | OK |
 | request_09 | OK | OK | OK | OK | OK | OK | OK |
-| request_10 | FAIL | OK | OK | FAIL | OK | OK | OK |
+| request_10 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
 | request_11 | FAIL | FAIL | OK | FAIL | FAIL | OK | FAIL |
 | request_12 | FAIL | OK | OK | FAIL | OK | OK | OK |
 | request_13 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL |
-| request_14 | FAIL | OK | OK | FAIL | OK | OK | OK |
+| request_14 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
 | request_15 | FAIL | OK | OK | FAIL | OK | OK | OK |
 | request_16 | OK | OK | OK | OK | OK | OK | OK |
-| request_17 | FAIL | OK | OK | FAIL | OK | OK | OK |
+| request_17 | FAIL | OK | OK | FAIL | FAIL | OK | OK |
 | request_18 | FAIL | OK | OK | FAIL | FAIL | FAIL | OK |
 | request_19 | FAIL | OK | FAIL | FAIL | FAIL | FAIL | OK |
-| request_20 | FAIL | OK | OK | FAIL | OK | OK | OK |
+| request_20 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
 | request_21 | FAIL | FAIL | OK | FAIL | FAIL | OK | FAIL |
 | request_22 | FAIL | OK | OK | FAIL | OK | OK | OK |
 | request_23 | FAIL | OK | OK | FAIL | OK | OK | OK |
-| request_24 | FAIL | OK | OK | FAIL | OK | OK | OK |
-| request_25 | FAIL | OK | OK | FAIL | OK | OK | OK |
+| request_24 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
+| request_25 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | OK |
 
 ## Failure Details
 
@@ -60,9 +60,9 @@
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `835019.9` | `873000` |
-| earliest_date_for_full_payment | `2019-11-30` | `2019-11-15` |
-| payment_plan | `2019-11-30:5491000` | `2019-11-15:5491000` |
+| amount_safe_to_pay | `1312390.52` | `873000` |
+| earliest_date_for_full_payment | `2019-10-28` | `2019-11-15` |
+| payment_plan | `2019-10-28:5491000` | `2019-11-15:5491000` |
 
 ### request_04
 
@@ -78,7 +78,11 @@
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `1505.3` | `737` |
+| affordability_status | `affordable_later` | `not_affordable` |
+| recommended_payment_method | `wait` | `not_recommended` |
+| amount_safe_to_pay | `15488` | `737` |
+| earliest_date_for_full_payment | `2025-11-06` | `` |
+| payment_plan | `2025-11-06:15488` | `none` |
 
 ### request_06
 
@@ -94,22 +98,25 @@
 | Field | Predicted | Expected |
 |:---|:---|:---|
 | amount_safe_to_pay | `68432` | `87170.56` |
+| earliest_date_for_full_payment | `2024-11-15` | `2024-10-23` |
 
 ### request_08
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| affordability_status | `not_affordable` | `affordable_later` |
-| recommended_payment_method | `not_recommended` | `wait` |
 | amount_safe_to_pay | `425.04` | `284.57` |
-| earliest_date_for_full_payment | `` | `2025-04-15` |
-| payment_plan | `none` | `2025-04-15:996.60` |
+| earliest_date_for_full_payment | `2025-05-15` | `2025-04-15` |
+| payment_plan | `2025-05-15:996.60` | `2025-04-15:996.60` |
 
 ### request_10
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `23594.22` | `12700` |
+| affordability_status | `affordable_later` | `not_affordable` |
+| recommended_payment_method | `wait` | `not_recommended` |
+| amount_safe_to_pay | `266700` | `12700` |
+| earliest_date_for_full_payment | `2024-12-06` | `` |
+| payment_plan | `2024-12-06:266700` | `none` |
 
 ### request_11
 
@@ -132,8 +139,8 @@
 |:---|:---|:---|
 | affordability_status | `affordable_with_plan` | `affordable_later` |
 | recommended_payment_method | `full_payment` | `wait` |
-| amount_safe_to_pay | `929.83` | `433.4` |
-| earliest_date_for_full_payment | `` | `2024-05-15` |
+| amount_safe_to_pay | `941.6` | `433.4` |
+| earliest_date_for_full_payment | `2024-03-07` | `2024-05-15` |
 | payment_plan | `2024-03-07:941.60` | `2024-05-15:941.60` |
 | spending_changes_needed | `stop:event_1091|stop:event_1090|reduce_to:event_1092:30.50` | `none` |
 
@@ -141,7 +148,11 @@
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `1058.19` | `597.74` |
+| affordability_status | `affordable_later` | `not_affordable` |
+| recommended_payment_method | `wait` | `not_recommended` |
+| amount_safe_to_pay | `970.35` | `597.74` |
+| earliest_date_for_full_payment | `2026-01-15` | `` |
+| payment_plan | `2026-01-15:5414.20` | `none` |
 
 ### request_15
 
@@ -154,12 +165,13 @@
 | Field | Predicted | Expected |
 |:---|:---|:---|
 | amount_safe_to_pay | `95194.67` | `243849.58` |
+| earliest_date_for_full_payment | `2026-04-15` | `2026-03-15` |
 
 ### request_18
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `812.73` | `462` |
+| amount_safe_to_pay | `664.77` | `462` |
 | earliest_date_for_full_payment | `2026-08-15` | `2026-09-15` |
 | payment_plan | `2026-08-15:3246.10` | `2026-09-15:3246.10` |
 
@@ -176,7 +188,11 @@
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `26194.8` | `5400` |
+| affordability_status | `affordable_later` | `not_affordable` |
+| recommended_payment_method | `wait` | `not_recommended` |
+| amount_safe_to_pay | `19540.47` | `5400` |
+| earliest_date_for_full_payment | `2026-07-15` | `` |
+| payment_plan | `2026-07-15:303700` | `none` |
 
 ### request_21
 
@@ -197,39 +213,47 @@
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
-| amount_safe_to_pay | `12844.17` | `9152` |
+| amount_safe_to_pay | `11466.28` | `9152` |
 
 ### request_24
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
+| affordability_status | `affordable_later` | `not_affordable` |
+| recommended_payment_method | `wait` | `not_recommended` |
 | amount_safe_to_pay | `19651.09` | `13420` |
+| earliest_date_for_full_payment | `2026-05-15` | `` |
+| payment_plan | `2026-05-15:109600` | `none` |
 
 ### request_25
 
 | Field | Predicted | Expected |
 |:---|:---|:---|
+| affordability_status | `affordable_later` | `not_affordable` |
+| recommended_payment_method | `wait` | `not_recommended` |
 | amount_safe_to_pay | `5287713.95` | `1425000` |
+| earliest_date_for_full_payment | `2024-07-15` | `` |
+| payment_plan | `2024-07-15:60496000` | `none` |
 
 ## Failure Categories
 
 | Category | Count | Request IDs |
 |:---|:---:|:---|
 | wrong_amount_safe | 22 | request_02, request_03, request_04, request_05, request_06, request_07, request_08, request_10, request_11, request_12, request_13, request_14, request_15, request_17, request_18, request_19, request_20, request_21, request_22, request_23, request_24, request_25 |
-| wrong_earliest_date | 9 | request_03, request_04, request_06, request_08, request_11, request_13, request_18, request_19, request_21 |
-| wrong_affordability_status | 6 | request_04, request_06, request_08, request_11, request_13, request_21 |
-| wrong_plan_dates | 5 | request_03, request_04, request_08, request_13, request_18 |
-| wrong_payment_method | 4 | request_04, request_08, request_13, request_19 |
+| wrong_earliest_date | 17 | request_03, request_04, request_05, request_06, request_07, request_08, request_10, request_11, request_13, request_14, request_17, request_18, request_19, request_20, request_21, request_24, request_25 |
+| wrong_plan_dates | 11 | request_03, request_04, request_05, request_08, request_10, request_13, request_14, request_18, request_20, request_24, request_25 |
+| wrong_affordability_status | 11 | request_04, request_05, request_06, request_10, request_11, request_13, request_14, request_20, request_21, request_24, request_25 |
+| wrong_payment_method | 9 | request_04, request_05, request_10, request_13, request_14, request_19, request_20, request_24, request_25 |
 | wrong_spending_changes | 4 | request_06, request_11, request_13, request_21 |
 | wrong_plan_amounts | 1 | request_19 |
 
 ## Systematic Patterns
 
 - wrong_amount_safe: 22 request(s) — request_02, request_03, request_04, request_05, request_06, request_07, request_08, request_10, request_11, request_12, request_13, request_14, request_15, request_17, request_18, request_19, request_20, request_21, request_22, request_23, request_24, request_25
-- wrong_earliest_date: 9 request(s) — request_03, request_04, request_06, request_08, request_11, request_13, request_18, request_19, request_21
-- wrong_affordability_status: 6 request(s) — request_04, request_06, request_08, request_11, request_13, request_21
-- wrong_plan_dates: 5 request(s) — request_03, request_04, request_08, request_13, request_18
-- wrong_payment_method: 4 request(s) — request_04, request_08, request_13, request_19
+- wrong_earliest_date: 17 request(s) — request_03, request_04, request_05, request_06, request_07, request_08, request_10, request_11, request_13, request_14, request_17, request_18, request_19, request_20, request_21, request_24, request_25
+- wrong_plan_dates: 11 request(s) — request_03, request_04, request_05, request_08, request_10, request_13, request_14, request_18, request_20, request_24, request_25
+- wrong_affordability_status: 11 request(s) — request_04, request_05, request_06, request_10, request_11, request_13, request_14, request_20, request_21, request_24, request_25
+- wrong_payment_method: 9 request(s) — request_04, request_05, request_10, request_13, request_14, request_19, request_20, request_24, request_25
 - wrong_spending_changes: 4 request(s) — request_06, request_11, request_13, request_21
 - wrong_plan_amounts: 1 request(s) — request_19
 
@@ -249,5 +273,5 @@
 | Retries | 0 |
 | Cache hits | 0 |
 | Estimated cost (USD) | $0.0000 |
-| Runtime (s) | 2.65 |
+| Runtime (s) | 0.61 |
 
